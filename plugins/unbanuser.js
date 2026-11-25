@@ -1,4 +1,4 @@
-let { MessageType } = require('@adiwajshing/baileys')
+let { MessageType } = require('../lib/wa/message-type')
 let handler = async (m, { conn, text}) => {
     if (!text) throw 'Siapa yang mau di unbanned?'
     let who

@@ -26,3 +26,7 @@ waweb
 # planned
 web-client
 package-lock.json
+
+# WhatsApp auth (Baileys 7)
+wa-auth/
+pairing-code.txt

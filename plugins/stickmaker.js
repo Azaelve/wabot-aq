@@ -1,7 +1,7 @@
 //made by Anshul
 const uploadImage = require('../lib/uploadImage')
 const { sticker } = require('../lib/sticker')
-const { MessageType } = require('@adiwajshing/baileys')
+const { MessageType } = require('../lib/wa/message-type')
 const effects = ['jail', 'gay', 'glass', 'wasted' ,'triggered', 'lolice', 'simpcard', 'horny']
 
 let handler = async (m, { conn, usedPrefix, text }) => {

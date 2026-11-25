@@ -1,10 +1,8 @@
 require('./config.js')
-const { WAConnection: _WAConnection } = require('@adiwajshing/baileys')
 const cloudDBAdapter = require('./lib/cloudDBAdapter')
 const { generate } = require('qrcode-terminal')
 const syntaxerror = require('syntax-error')
-const simple = require('./lib/simple')
-//  const logs = require('./lib/logs')
+const wa = require('./lib/wa')
 const { promisify } = require('util')
 const yargs = require('yargs/yargs')
 const Readline = require('readline')
@@ -21,14 +19,11 @@ try {
 const { Low, JSONFile } = low
 
 const rl = Readline.createInterface(process.stdin, process.stdout)
-const WAConnection = simple.WAConnection(_WAConnection)
-
 
 global.API = (name, path = '/', query = {}, apikeyqueryname) => (name in global.APIs ? global.APIs[name] : name) + path + (query || apikeyqueryname ? '?' + new URLSearchParams(Object.entries({ ...query, ...(apikeyqueryname ? { [apikeyqueryname]: global.APIKeys[name in global.APIs ? global.APIs[name] : name] } : {}) })) : '')
 global.timestamp = {
   start: new Date
 }
-// global.LOGGER = logs()
 const PORT = process.env.PORT || 3000
 global.opts = new Object(yargs(process.argv.slice(2)).exitProcess(false).parse())
 
@@ -41,13 +36,37 @@ global.db = new Low(
 )
 global.DATABASE = global.db // Backwards Compatibility
 
-global.conn = new WAConnection()
-conn.version = [2, 2143, 3]
-let authFile = opts['session'] ? opts['session'] + '.json' : `session.data.json`
-if (fs.existsSync(authFile)) conn.loadAuthInfo(authFile)
-if (opts['trace']) conn.logger.level = 'trace'
-if (opts['debug']) conn.logger.level = 'debug'
-if (opts['big-qr']) conn.on('qr', qr => generate(qr, { small: false }))
+/**
+ * Nomor untuk metode pairing code, mis. `node . --pairing 6285178964685`.
+ * Tanpa opsi ini bot memakai QR seperti biasa.
+ */
+const pairingPhone = opts['pairing'] || opts['pairing-code'] || process.env.WA_PAIRING_NUMBER || ''
+const authDir = opts['session'] || process.env.WA_AUTH_DIR || 'wa-auth'
+
+global.conn = null
+let conn = null
+
+if (opts['test']) {
+  // Mode uji tanpa koneksi WhatsApp: socket palsu agar plugin tetap termuat.
+  const { LegacyClient } = require('./lib/wa/legacy')
+  const fakeSocket = { ev: { on() { } }, sendMessage: async () => ({ key: { id: 'TEST' } }) }
+  conn = new LegacyClient(fakeSocket)
+  conn.user = { jid: '2219191@s.whatsapp.net', name: 'test', phone: {} }
+  global.conn = conn
+  rl.on('line', line => {
+    conn.emit('chat-update', {
+      jid: conn.user.jid,
+      hasNewMessage: true,
+      count: 1,
+      messages: { all: () => [{ chat: conn.user.jid, sender: conn.user.jid, text: line.trim(), mtype: 'conversation', msg: {}, key: { remoteJid: conn.user.jid, fromMe: false }, reply: () => { } }] }
+    })
+  })
+} else {
+  rl.on('line', line => {
+    if (process.send) process.send(line.trim())
+  })
+}
+
 if (!opts['test']) setInterval(async () => {
   await global.db.write()
 }, 60 * 1000) // Save every minute
@@ -55,63 +74,7 @@ if (opts['server']) require('./server')(global.conn, PORT)
 // API lokal pengganti layanan yang sudah mati (lihat lib/localapi.js)
 require('./lib/localapi').start(global.localAPIPort)
 
-conn.user = {
-  jid: '',
-  name: '',
-  phone: {}
-}
-if (opts['test']) {
-  conn.user = {
-    jid: '2219191@s.whatsapp.net',
-    name: 'test',
-    phone: {}
-  }
-  conn.prepareMessageMedia = (buffer, mediaType, options = {}) => {
-    return {
-      [mediaType]: {
-        url: '',
-        mediaKey: '',
-        mimetype: options.mimetype || '',
-        fileEncSha256: '',
-        fileSha256: '',
-        fileLength: buffer.length,
-        seconds: options.duration,
-        fileName: options.filename || 'file',
-        gifPlayback: options.mimetype == 'image/gif' || undefined,
-        caption: options.caption,
-        ptt: options.ptt
-      }
-    }
-  }
-
-  conn.sendMessage = async (chatId, content, type, opts = {}) => {
-    let message = await conn.prepareMessageContent(content, type, opts)
-    let waMessage = await conn.prepareMessageFromContent(chatId, message, opts)
-    if (type == 'conversation') waMessage.key.id = require('crypto').randomBytes(16).toString('hex').toUpperCase()
-    conn.emit('chat-update', {
-      jid: conn.user.jid,
-      hasNewMessage: true,
-      count: 1,
-      messages: {
-        all() {
-          return [waMessage]
-        }
-      }
-    })
-  }
-  rl.on('line', line => conn.sendMessage('123@s.whatsapp.net', line.trim(), 'conversation'))
-} else {
-  rl.on('line', line => {
-    process.send(line.trim())
-  })
-  conn.connect().then(async () => {
-    if (global.db.data == null) await loadDatabase()
-    fs.writeFileSync(authFile, JSON.stringify(conn.base64EncodedAuthInfo(), null, '\t'))
-    global.timestamp.connect = new Date
-  })
-}
 process.on('uncaughtException', console.error)
-// let strQuot = /(["'])(?:(?=(\\?))\2.)*?\1/
 
 loadDatabase()
 async function loadDatabase() {
@@ -150,18 +113,13 @@ global.reloadHandler = function () {
   conn.on('group-participants-update', conn.onParticipantsUpdate)
   conn.on('CB:action,,call', conn.onCall)
   if (isInit) {
-    conn.on('error', conn.logger.error)
+    conn.on('error', console.error)
     conn.on('close', () => {
       setTimeout(async () => {
         try {
-          if (conn.state === 'close') {
-            if (fs.existsSync(authFile)) await conn.loadAuthInfo(authFile)
-            await conn.connect()
-            fs.writeFileSync(authFile, JSON.stringify(conn.base64EncodedAuthInfo(), null, '\t'))
-            global.timestamp.connect = new Date
-          }
+          if (!opts['test']) await startConnection()
         } catch (e) {
-          conn.logger.error(e)
+          console.error(e)
         }
       }, 5000)
     })
@@ -169,6 +127,40 @@ global.reloadHandler = function () {
   isInit = false
   return true
 }
+
+/**
+ * Buka koneksi WhatsApp (pairing code atau QR) lalu pasang handler.
+ */
+async function startConnection() {
+  conn = await wa.connect({
+    phone: pairingPhone,
+    authDir,
+    logger: console,
+    onQR: qr => generate(qr, { small: false }),
+    onPairingCode: (code, phone) => {
+      console.log('\n==================================================')
+      console.log('  KODE PAIRING WHATSAPP untuk +' + phone)
+      console.log('  ' + code)
+      console.log('  Masukkan di WhatsApp > Perangkat tertaut >')
+      console.log('  Tautkan dengan nomor telepon.')
+      console.log('==================================================\n')
+      try {
+        fs.writeFileSync(path.join(__dirname, 'pairing-code.txt'), code + '\n')
+      } catch (e) { }
+    },
+  })
+  global.conn = conn
+  if (opts['server']) require('./server')(global.conn, PORT)
+  conn.on('open', () => {
+    global.timestamp.connect = new Date
+    console.log('[wa] terhubung sebagai', conn.user.jid)
+  })
+  global.reloadHandler()
+}
+
+if (!opts['test']) startConnection().catch(e => {
+  console.error('[wa] gagal memulai koneksi:', e)
+})
 
 // Plugin Loader
 let pluginFolder = path.join(__dirname, 'plugins')
@@ -178,7 +170,7 @@ for (let filename of fs.readdirSync(pluginFolder).filter(pluginFilter)) {
   try {
     global.plugins[filename] = require(path.join(pluginFolder, filename))
   } catch (e) {
-    conn.logger.error(e)
+    console.error(e)
     delete global.plugins[filename]
   }
 }
@@ -188,18 +180,18 @@ global.reload = (_event, filename) => {
     let dir = path.join(pluginFolder, filename)
     if (dir in require.cache) {
       delete require.cache[dir]
-      if (fs.existsSync(dir)) conn.logger.info(`re - require plugin '${filename}'`)
+      if (fs.existsSync(dir)) console.info(`re - require plugin '${filename}'`)
       else {
-        conn.logger.warn(`deleted plugin '${filename}'`)
+        console.warn(`deleted plugin '${filename}'`)
         return delete global.plugins[filename]
       }
-    } else conn.logger.info(`requiring new plugin '${filename}'`)
+    } else console.info(`requiring new plugin '${filename}'`)
     let err = syntaxerror(fs.readFileSync(dir), filename)
-    if (err) conn.logger.error(`syntax error while loading '${filename}'\n${err}`)
+    if (err) console.error(`syntax error while loading '${filename}'\n${err}`)
     else try {
       global.plugins[filename] = require(dir)
     } catch (e) {
-      conn.logger.error(e)
+      console.error(e)
     } finally {
       global.plugins = Object.fromEntries(Object.entries(global.plugins).sort(([a], [b]) => a.localeCompare(b)))
     }
@@ -207,19 +199,19 @@ global.reload = (_event, filename) => {
 }
 Object.freeze(global.reload)
 fs.watch(path.join(__dirname, 'plugins'), global.reload)
-global.reloadHandler()
+if (opts['test']) global.reloadHandler()
 
 
 
 // Quick Test
 async function _quickTest() {
   let test = await Promise.all([
-    cp.spawn('ffmpeg'),
-    cp.spawn('ffprobe'),
+    cp.spawn('ffmpeg', ['-version']),
+    cp.spawn('ffprobe', ['-version']),
     cp.spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-filter_complex', 'color', '-frames:v', '1', '-f', 'webp', '-']),
-    cp.spawn('convert'),
-    cp.spawn('magick'),
-    cp.spawn('gm'),
+    cp.spawn('convert', ['-version']),
+    cp.spawn('magick', ['-version']),
+    cp.spawn('gm', ['-version']),
   ].map(p => {
     return Promise.race([
       new Promise(resolve => {
@@ -245,11 +237,11 @@ async function _quickTest() {
   require('./lib/sticker').support = s
   Object.freeze(global.support)
 
-  if (!s.ffmpeg) conn.logger.warn('Please install ffmpeg for sending videos (pkg install ffmpeg)')
-  if (s.ffmpeg && !s.ffmpegWebp) conn.logger.warn('Stickers may not animated without libwebp on ffmpeg (--enable-ibwebp while compiling ffmpeg)')
-  if (!s.convert && !s.magick && !s.gm) conn.logger.warn('Stickers may not work without imagemagick if libwebp on ffmpeg doesnt isntalled (pkg install imagemagick)')
+  if (!s.ffmpeg) console.warn('Please install ffmpeg for sending videos (pkg install ffmpeg)')
+  if (s.ffmpeg && !s.ffmpegWebp) console.warn('Stickers may not animated without libwebp on ffmpeg (--enable-ibwebp while compiling ffmpeg)')
+  if (!s.convert && !s.magick && !s.gm) console.warn('Stickers may not work without imagemagick if libwebp on ffmpeg doesnt isntalled (pkg install imagemagick)')
 }
 
 _quickTest()
-  .then(() => conn.logger.info('Quick Test Done'))
+  .then(() => console.info('Quick Test Done'))
   .catch(console.error)

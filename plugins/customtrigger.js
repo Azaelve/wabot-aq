@@ -1,7 +1,7 @@
 const uploadImage = require('../lib/uploadImage')
 const uploadFile = require('../lib/uploadFile')
 const { sticker } = require('../lib/sticker')
-const { MessageType } = require('@adiwajshing/baileys')
+const { MessageType } = require('../lib/wa/message-type')
 //api down always at night :/
 let handler = async (m, { conn, text, command, usedPrefix }) => {
   if (!text) throw 'Enter Text!!'

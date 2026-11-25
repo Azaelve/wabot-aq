@@ -1,4 +1,4 @@
-const { newMessagesDB } = require("@adiwajshing/baileys")
+const { newMessagesDB } = require('../lib/wa/message-type')
 
 let handler = async (m, { conn, text }) => {
   if (!text) throw false

@@ -15,7 +15,7 @@ Dokumen ini adalah ingatan kerja untuk sesi/agen berikutnya. Terakhir diperbarui
   - `scrapers/` — `kbbi.js`, `kodepos.js`, `resep.js`, `berita.js`, `index.js`.
   - `routes/` — satu modul per kelompok endpoint (`health`, `games`, `wiki`, `sholat`, `ssweb`, `tiktok`, `kbbi`, `kodepos`, `resep`, `news`) + `index.js` sebagai registry.
   - `server.js` — `createApp()` (rakit registry + fallback 503 + error handler), `index.js` — `start()`.
-- `lib/localapi.js` & `lib/scrapers.js` — facade tipis yang meneruskan ke `lib/api/` (kompatibilitas `require` lama).
+- `lib/localapi.js` — facade tipis yang meneruskan ke `lib/api/` (dipakai `main.js`). Facade `lib/scrapers.js` sudah dihapus karena tidak ada pemakainya.
 - `lib/simple.js` — pembungkus API Baileys (jangan diubah tanpa alasan kuat).
 - `plugins/` — 1 file = 1 perintah/fitur; dimuat otomatis dan di-reload oleh `fs.watch`.
 - `test.js` — syntax check seluruh file JS (`node --check`); dipakai CI.
@@ -79,8 +79,11 @@ Rute yang sudah ada di `lib/localapi.js`:
 | `/api/wiki` | Wikipedia REST `id.wikipedia.org` | `{status, result:{status, result}}` |
 | `/api/jadwalsholat` | Aladhan API | `{status, data:{string}}` |
 | `/api/ssweb` | thum.io | PNG |
-| `/dl/tiktok` | tikwm.com | `{status, result:{name,caption,link_dl1}}` |
-| `/kbbi` | scraper `kbbi.web.id` (`lib/scrapers.js`) | `{status, message:{word, list:[]}}` |
+| `/dl/tiktok` | tikwm.com + tikloapp.com (`scrapers/tiktok.js`) | `{status, result:{name,caption,link_dl1,type,images,live}}` |
+| `/dl/ig` | igexport.com (`scrapers/instagram.js`) | `{status, result:{shortcode, data:[{data,type,filename}]}}` |
+| `/api/soundcloud` | api-v2.soundcloud.com (`scrapers/soundcloud.js`) | `{status, result:{total,count,tracks:[{title,user,permalink,duration_label,streams}]}}` |
+| `/dl/soundcloud` | idem (segmen HLS digabung) | berkas `audio/mp4` + header `X-SoundCloud-Segments` |
+| `/kbbi` | scraper `kbbi.web.id` (`lib/api/scrapers/kbbi.js`) | `{status, message:{word, list:[]}}` |
 | `/kodepos` | API gratis `carikodepos.id` | `{status, result:[{province,city,subdistrict,urban,postalcode}]}` |
 | `/api/resep-masak` | scraper `resepkoki.id` | `{title,thumb,url,tingkat,duration,banyak,bahan,cara}` |
 | `/news/:sumber` | RSS `cnn`, `antara`, `republika`, `cnbc` | `{status, judul, tanggal, artikel, thumb, url}` |
@@ -112,6 +115,23 @@ Cara menambah pengganti: buat modul di `lib/api/routes/` yang mengekspor `{ name
 - **LSP/ISP**: setiap modul route memenuhi kontrak yang sama (`name`, `path`, `createRouter()`), dan route hanya menerima dependensi yang dipakainya.
 - **DIP**: route bergantung pada interface scraper (`../scrapers`), bukan pada `node-fetch`/`cheerio`; semua akses jaringan lewat `lib/api/http.js`.
 - Error seragam: route melempar `ApiError`, satu error handler pusat memetakan status; handler async dibungkus `asyncHandler`.
+
+## Review Setelah Commit 788c4d8 (2026-11-25)
+
+Dibuang karena mati/tidak terpakai:
+
+- `lib/scrapers.js` — facade lama, nol pemakai setelah `lib/api/scrapers/` ada. Dihapus.
+- Ekspor `FEEDS` dari `scrapers/berita.js` dan `scrapers/index.js` — hanya dipakai internal `berita()`.
+- Ekspor `USER_AGENT`/`TIMEOUT` dari `http.js` dan `port` dari `api/index.js` — tidak ada pemakai.
+- Ekspor `pick`/`family100` dari `data/games.js` — internal saja (`question()`/`family()`).
+- Selektor durasi spekulatif di `scrapers/resep.js` (`.single-recipe-meta, .recipe-meta, .single-recipe-time`) — selalu kosong; diganti `duration: ''` dengan komentar bahwa field-nya hanya untuk kontrak plugin.
+
+Disatukan untuk menghapus duplikasi:
+
+- `errors.js` menambah `requireParam(value, name)` — menggantikan pola `text(...)` + `if (!x) throw ApiError.badRequest` di 6 route.
+- `errors.js` menambah `callUpstream(label, fn)` — menggantikan 7 blok `try/catch` yang semuanya mengubah error menjadi 502 dengan label yang sama.
+
+Hasil: 13 berkas disentuh, 1 berkas dihapus, perilaku tidak berubah (17 kasus rute + 5 kasus plugin diuji ulang). `node test.js` lolos 361 file.
 
 ## Batasan / Catatan
 
@@ -184,7 +204,7 @@ Bot **bisa dijalankan** tanpa layanan di bawah ini; yang mati hanya fitur terkai
 |---|---|
 | `/videomaker/*`, `/textpro`, `/ephoto`, `/ttp`, `/attp`, `/quotemaker`, `/magernulis`, `/tahta` | Renderer lokal (ffmpeg/ImageMagick + font) **atau** layanan image-generation (Cloudinary, htmlcsstoimage, Bannerbear, APITemplate.io) |
 | `/text2img` (salism3api, dipakai `glowing`/`hornycard`) | API image generation berbayar (mis. Workers AI, Stability) |
-| `/dl/{ig,igs,igstalk,ighighlight,fb,twitter,smule}`, `/download/*` | API downloader/ scraper (RapidAPI) atau `yt-dlp` dijalankan lokal |
+| `/dl/{igs,igstalk,ighighlight,fb,twitter,smule}`, `/download/*` | API downloader/ scraper (RapidAPI) atau `yt-dlp` dijalankan lokal |
 | `/sticker/{stickerly,stickerline}`, `/api/telegram-sticker` | Telegram Bot API (`getStickerSet`) + scraping Stickerly |
 | `/api/spotify`, `/game/tebaklagu`, `/api/kuis/tebakgambar` | Spotify Web API (client id/secret) atau preview iTunes; sumber gambar kuis |
 | `/api/unsplash`, `/api/pinimg`, `/randomimage/*`, `/asupan/*` | Unsplash access key (gratis) / Pinterest / sumber acak |
@@ -198,11 +218,26 @@ Catatan: `lib/scrape_joox.js` masih memakai cookie JOOX yang tidak valid.
 
 ## Scraper yang Sudah Dibuat (2026-11-25)
 
-`lib/scrapers.js` berisi empat scraper tanpa API key, dipanggil oleh rute di `lib/localapi.js`: `kbbi(kata)`, `kodepos(q)`, `resep(q)`, `berita(sumber)`. Semua memakai `node-fetch` + `cheerio`, User-Agent browser, timeout 25 dtk, dan melempar pesan berbahasa Indonesia.
+`lib/api/scrapers/` berisi empat scraper tanpa API key, dipanggil oleh modul route: `kbbi(kata)`, `kodepos(q)`, `resep(q)`, `berita(sumber)`. Semua memakai helper `lib/api/http.js` (node-fetch + cheerio, User-Agent browser, timeout 25 dtk) dan melempar pesan berbahasa Indonesia.
 
 Situs yang dipakai: `kbbi.web.id/{kata}` (definisi di `#d1`, judul dari `<title>`), `carikodepos.id/api/postal-codes` (JSON, limit 10, diurutkan berdasarkan relevansi), `resepkoki.id` (cari `?s=` lalu halaman `.ingredients-table` + `.recipe-steps-table`), RSS berita (`item` pertama).
 
 `plugins/news.js` sekarang menerima `cnn|antara|republika|cnbc` di samping nama lama; nama lama akan dibalas pesan jelas dari API lokal.
 
-Diuji end-to-end lewat plugin (bukan hanya curl): `kbbi buku`, `kodepos Lamongan`, `masak nasi goreng`, `cnn`, dan `detik` (gagal dengan pesan jelas). `node test.js` lolos 328 file (bertambah `lib/scrapers.js`; setelah `test.js` dibuat rekursif menjadi 362 file dan ikut memeriksa `lib/api/**`).
+Diuji end-to-end lewat plugin (bukan hanya curl): `kbbi buku`, `kodepos Lamongan`, `masak nasi goreng`, `cnn`, dan `detik` (gagal dengan pesan jelas). `node test.js` lolos 328 file (saat itu); setelah `test.js` dibuat rekursif menjadi 362 file dan ikut memeriksa `lib/api/**`.
 - `database.json` dan `session.data.json` dibuat saat runtime, tidak ada di repo.
+
+## Lapisan WhatsApp (v2.7.0, Baileys 7)
+
+`@adiwajshing/baileys` 3.5.3 sudah mati (404); penggantinya paket npm `baileys` 7.x.
+Semua kode WhatsApp ada di `lib/wa/` dan tidak ada plugin yang boleh mengimpor `baileys` langsung:
+
+- `message-type.js` — shim `MessageType`/`Presence`/`GroupSettingChange`/`WA_MESSAGE_STUB_TYPES`/`newMessagesDB`/`WAMessageProto` (nilai lama dipertahankan; impor lama sudah dialihkan ke sini).
+- `content.js` — `buildContent(type, content, options)` murni: MessageType lama → konten Baileys 7.
+- `normalize.js` — `normalizePhone`, `unwrapMessage`, `extractText`, `toLegacyMessage`, `smsg` (murni, diuji).
+- `auth.js` — `useMultiFileAuthState` ke folder `wa-auth/` (bukan `session.data.json`).
+- `client.js` — `makeWASocket` + `requestPairingCode`; logger pino dan socket injectable.
+- `legacy.js` — `LegacyClient`: `sendMessage`/`sendFile`/`reply`/`sendButton`/`send2Button`/`groupMetadata`/`getProfilePicture`/`chatRead`/`relayWAMessage`/`downloadMedia`/`updateMediaMessage`.
+- `index.js` — `connect()`; memetakan event baru (`messages.upsert`, `group-participants.update`, `messages.update`, `call`, `connection.update`) ke event lama (`chat-update`, `message-delete`, `group-participants-update`, `CB:action,,call`, `close`).
+
+`lib/simple.js` sekarang hanya re-export `smsg`. Jalankan: `node . --pairing 6285178964685` (kode 8 karakter, juga ditulis ke `pairing-code.txt`), atau `node .` untuk QR. Tes: `npm test` = `node test.js` + `node --test tests/`.

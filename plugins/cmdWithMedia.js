@@ -1,4 +1,4 @@
-const { MessageType, newMessagesDB } = require("@adiwajshing/baileys")
+const { MessageType, newMessagesDB } = require('../lib/wa/message-type')
 
 module.exports = {
     async all(m, chatUpdate) {

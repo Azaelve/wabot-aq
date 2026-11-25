@@ -1,4 +1,4 @@
-let { WAMessageProto } = require('@adiwajshing/baileys')
+let { WAMessageProto } = require('../lib/wa/message-type')
 
 let handler = async (m, { conn, command, usedPrefix, text }) => {
     let M = WAMessageProto.WebMessageInfo

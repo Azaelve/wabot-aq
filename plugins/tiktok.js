@@ -6,29 +6,26 @@ let handler = async (m, { conn, args }) => {
   }, 'APIKEY'))
   if (res.status !== 200) throw await res.text()
   let json = await res.json()
-  if (!json.status) throw json
-  /*let url = json.server_1 || json.info[0].videoUrl || ''
-  if (!url) throw 'Gagal mengambil url download'
-  let txt = json.info[0].text
-  for (let hashtag of json.info[0].hashtags) txt = txt.replace(hashtag, '*$&*')
-  await conn.sendFile(m.chat, url, 'tiktok.mp4', `
-▶ ${json.info[0].playCount} Views
-❤ ${json.info[0].diggCount} Likes
-🔁 ${json.info[0].shareCount} Shares
-💬 ${json.info[0].commentCount} Comments
-🎵 ${json.info[0].musicMeta.musicName} by ${json.info[0].musicMeta.musicAuthor}
-- *By:* ${json.info[0].authorMeta.nickName} (${json.info[0].authorMeta.name})
-- *Desc:*
-${txt}
-  `.trim(), m)*/
-  let url = json.result.link_dl1 || json.result.link_dl2 || ''
-  if (!url) throw 'Gagal mengambil url download'
+  if (!json.status || !json.result) throw json.message || 'Gagal mengambil media'
+  let { name, caption, link_dl1, images, live, type } = json.result
   let txt = `
-  - *By:* ${json.result.name}
-  - *Caption:*
-  ${json.result.caption}
-    `
-    await conn.sendFile(m.chat, url, 'tiktok.mp4', txt.trim(), m)
+    - *By:* ${name}
+    - *Caption:*
+    ${caption}
+      `.trim()
+  if (images && images.length) {
+    // Postingan foto / live photo: kirim tiap slide, sertakan pasangan live-nya.
+    for (let i = 0; i < images.length; i++) {
+      await conn.sendFile(m.chat, images[i], `tiktok_${i + 1}.jpg`, i === 0 ? txt : '', m)
+      if (live && live[i]) await conn.sendFile(m.chat, live[i], `tiktok_${i + 1}_live.mp4`, '', m)
+    }
+    return
+  }
+  if (type === 'video' && link_dl1) {
+    await conn.sendFile(m.chat, link_dl1, 'tiktok.mp4', txt, m)
+    return
+  }
+  throw 'Gagal mengambil url download'
 }
 handler.help = ['tiktok'].map(v => v + ' <url>')
 handler.tags = ['downloader']

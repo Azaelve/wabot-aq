@@ -1,6 +1,6 @@
 # wabot-aq
 
-Simple WhatsApp Bot — **fork Azaelve**, versi `2.6.0`
+Simple WhatsApp Bot — **fork Azaelve**, versi `2.7.0` (Baileys 7)
 
 [![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/Azaelve/wabot-aq)
 
@@ -177,14 +177,41 @@ jadibot: false,
 - **Fork & pemeliharaan:** [Azaelve](https://github.com/Azaelve) — [Azaelve/wabot-aq](https://github.com/Azaelve/wabot-aq)
 - **Kode asli:** [Nurutomo](https://github.com/Nurutomo) — [Nurutomo/wabot-aq](https://github.com/Nurutomo/wabot-aq)
 - **Kontributor:** [Ariffb](https://github.com/ariffb25), [Ftwrr](https://github.com/Ftwrr)
-- **API lokal & scraper di fork ini:** dibangun ulang sebagai pengganti host pihak ketiga yang sudah mati (XTEAM, Zahir, Zeks, LeysCoder, Nurutomo API) — sekarang berjalan di `lib/localapi.js` + `lib/scrapers.js` milik sendiri.
+- **API lokal & scraper di fork ini:** dibangun ulang sebagai pengganti host pihak ketiga yang sudah mati (XTEAM, Zahir, Zeks, LeysCoder, Nurutomo API) — sekarang berjalan di `lib/api/` milik sendiri.
+
+## Migrasi Baileys 7 (v2.7.0)
+
+Bot sekarang memakai paket npm **`baileys` 7.x** (protokol WhatsApp Web terbaru), bukan `@adiwajshing/baileys` 3.5.3 yang sudah tidak bisa tersambung (`Unexpected server response: 404`).
+
+Lapisan WhatsApp dipisah agar plugin tidak perlu diubah dan semuanya bisa diuji tanpa jaringan:
+
+```
+lib/wa/
+  message-type.js  # shim MessageType/Presence/GroupSettingChange (nilai lama dipertahankan)
+  content.js       # MessageType lama -> konten Baileys 7 (fungsi murni)
+  normalize.js     # pesan Baileys 7 -> objek `m` gaya lama + normalisasi nomor pairing
+  auth.js          # useMultiFileAuthState (folder wa-auth/)
+  client.js        # makeWASocket + requestPairingCode (logger, socket injectable)
+  legacy.js        # LegacyClient: sendMessage/sendFile/reply/sendButton/... di atas socket baru
+  index.js         # connect(): sambungkan event Baileys 7 ke event lama (chat-update, dst.)
+```
+
+Tes: `npm test` menjalankan pemeriksaan sintaks seluruh berkas lalu `node --test tests/` (konten, normalisasi, dan adaptor legacy dengan socket palsu).
+
+### Menjalankan dengan kode pairing
+
+```bash
+node . --pairing 6285178964685
+```
+
+Kode 8 karakter dicetak di terminal (dan disimpan di `pairing-code.txt`). Masukkan lewat **WhatsApp → Perangkat tertaut → Tautkan dengan nomor telepon**. Sesi tersimpan di folder `wa-auth/`, jadi setelah berhasil login cukup `node .` tanpa `--pairing`. Tanpa opsi `--pairing`, bot menampilkan QR seperti biasa (`--big-qr` untuk QR besar).
 
 ## Catatan fork ini (v2.6.0)
 
 Host API lama (`api.xteam.xyz`, `zahirr-web.herokuapp.com`, `api.zeks.xyz`, `leyscoders-api.herokuapp.com`, `nurutomo.herokuapp.com`) sudah mati, jadi fork ini tidak lagi bergantung padanya:
 
 - **API lokal** dijalankan otomatis oleh `main.js` di `http://127.0.0.1:3001` (bisa diubah lewat env `LOCAL_API_PORT`). Berisi bank soal game, proxy Wikipedia/Aladhan/thum.io/tikwm, dan fallback 503 yang jelas untuk fitur yang belum punya penyedia.
-- **Scraper sendiri**: KBBI (`/kbbi`), kode pos (`/kodepos`), resep (`/api/resep-masak`), berita RSS `cnn`/`antara`/`republika`/`cnbc` (`/news/:sumber`).
+- **Scraper sendiri**: KBBI (`/kbbi`), kode pos (`/kodepos`), resep (`/api/resep-masak`), berita RSS `cnn`/`antara`/`republika`/`cnbc` (`/news/:sumber`), downloader Instagram (`/dl/ig`, lewat igexport.com — mendukung foto, carousel, dan reel), serta SoundCloud (`/api/soundcloud` untuk pencarian, `/dl/soundcloud` untuk mengunduh audio HLS).
 
 Struktur API lokal mengikuti prinsip SOLID — tiap bagian punya satu tanggung jawab, dan endpoint baru cukup didaftarkan di registry:
 
@@ -198,13 +225,12 @@ lib/api/
   server.js        # createApp(): rakit route, fallback 503, error handler
   index.js         # start()
 lib/localapi.js    # facade lama -> lib/api
-lib/scrapers.js    # facade lama -> lib/api/scrapers
 ```
 
 Menambah endpoint: buat modul di `lib/api/routes/` yang mengekspor `{ name, path, createRouter }`, daftarkan di `lib/api/routes/index.js`. `server.js` tidak perlu diubah.
 - **Sticker** tidak lagi memanggil host luar: `lib/sticker.js` memakai ffmpeg atau ImageMagick/GraphicsMagick saja.
 - **Keamanan:** backdoor `plugins/..js` dihapus, anti-delete/participantsUpdate/onCall diperbaiki, dan beberapa bug flag `enable.js` dibetulkan.
-- **Dependensi:** `@adiwajshing/baileys` dipatok `3.5.3`, `xmldom` diganti `@xmldom/xmldom`, `request` diganti `got`, ditambah `axios`/`qs`/`steno`.
+- **Dependensi:** `@adiwajshing/baileys` 3.5.3 diganti `baileys` 7.x (lihat bagian migrasi di atas), `xmldom` diganti `@xmldom/xmldom`, `request` diganti `got`, ditambah `axios`/`qs`/`steno`.
 
 Dokumentasi internal (peta proyek, status API, daftar fitur yang masih butuh pihak ketiga): [AGENTS.md](AGENTS.md).
 

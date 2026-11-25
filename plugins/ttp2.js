@@ -1,6 +1,6 @@
 const fetch = require('node-fetch')
 const { sticker } = require('../lib/sticker')
-const { MessageType } = require('@adiwajshing/baileys')
+const { MessageType } = require('../lib/wa/message-type')
 
 let handler = async (m, { conn, text }) => {
   try {

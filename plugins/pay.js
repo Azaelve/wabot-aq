@@ -1,4 +1,4 @@
-let { MessageType } = require('@adiwajshing/baileys')
+let { MessageType } = require('../lib/wa/message-type')
 let pajak = 0.02
 let handler = async (m, { conn, text }) => {
   let who
