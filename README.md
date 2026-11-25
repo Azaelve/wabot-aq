@@ -236,6 +236,7 @@ Tanpa opsi `--pairing`, bot menampilkan QR di terminal (`--big-qr` untuk QR besa
 - **Owner & staff dua lapis** — `global.owner` di `config.js` (ditambah nomor bot dan pesan `fromMe`) adalah lapis owner; `global.staff` atau `user.staff = true` di database adalah lapis staff untuk perintah internal. Plugin menandai kebutuhannya lewat `handler.owner`, `handler.staff`, `handler.mods`, atau `handler.premium`.
 - **Cooldown & anti-spam** — `handler.cooldown = 5000` memberi jeda 5 detik per pengirim untuk perintah itu; anti-spam bawaan membatasi 10 pesan per 10 detik dan hanya memberi satu peringatan per jendela.
 - **EXIF stiker** — `lib/sticker-exif.js` menulis id paket, nama paket, pembuat, dan emoji ke stiker webp; `sticker()` memakainya dan `getexif` membacanya kembali.
+- **Stiker audio** — balas voice note dengan `.sticker`: bot mengirim stiker penanda (`src/sticker-audio.jpg`, nama paket dari `lib/exif.json`) lalu audio aslinya sebagai voice note. Logika pengenalan audio dan rencana kirimnya ada di `lib/sticker-audio.js`.
 - **Pengaturan per grup** — tiap grup punya `settings` sendiri di database: saklar fitur, prefix, dan bahasa. Staff atau owner mengubahnya dengan `.grup` (lihat `.grup` untuk daftar), misalnya `.grup prefix !`, `.grup prefix none`, `.grup bahasa en`, `.grup fitur antilink off`, atau `.grup reset`. Modul murninya ada di `lib/group-settings.js`, dan pesan gagal (`global.dfail`) otomatis memakai bahasa grup.
 
 ## Catatan fork ini (v2.6.0)

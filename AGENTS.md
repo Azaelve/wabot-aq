@@ -254,6 +254,18 @@ Tiga fitur yang belum ada di wabot-aq, ditulis sebagai modul murni yang dapat di
 
 Tes: `tests/permission.test.js`, `tests/cooldown.test.js`, `tests/sticker-exif.test.js` (termasuk WebP sintetis untuk membuktikan `addExif`/`readExif`). Total `npm test` saat ini **63 tes lolos**.
 
+## Stiker Audio (2026-11-25)
+
+`lib/sticker-audio.js` menangani kasus "balas voice note dengan `.sticker`": bot mengirim **stiker penanda** (dari `src/sticker-audio.jpg`) lalu **audio aslinya**. Modulnya murni supaya bisa diuji tanpa WhatsApp:
+
+- `VOICE_MIME` (`audio/ogg; codecs=opus`) dan `AUDIO_EXTENSIONS` (mimetype → ekstensi).
+- `isAudioMedia(media)` — true untuk `mimetype` audio/\*, `mtype: 'audioMessage'`, atau `ptt` tanpa mimetype.
+- `audioExtension(mimetype)` — default `ogg`.
+- `describeAudio(media)` — `{ mimetype, ptt, seconds, filename }`; PTT selalu memakai `VOICE_MIME` dan nama `voice.ogg`, audio biasa mempertahankan mimetype asal.
+- `planStickerAudio({ sticker, audio, media })` — urutan kirim `[{ kind: 'sticker' }, { kind: 'audio', options }]`, menolak buffer kosong.
+
+`plugins/sticker.js` memakai modul itu di cabang audio sebelum cabang gambar/video/URL, jadi `.sticker` pada VN tidak lagi gagal dengan "Conversion failed". Nama paket/pembuat stiker tetap dari konfigurasi lama: `global.packname`/`global.author` yang dibaca `config.js` dari `lib/exif.json` (`spackname`/`sauthor`); tidak ada berkas konfigurasi `.saudio` di repo ini. Tes: `tests/sticker-audio.test.js`.
+
 ## Pengaturan per Grup (2026-11-25)
 
 `lib/group-settings.js` adalah satu-satunya pemilik bentuk pengaturan per grup. Data disimpan di `global.db.data.chats[jid].settings`:
