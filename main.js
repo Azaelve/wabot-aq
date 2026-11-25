@@ -11,6 +11,7 @@ const cp = require('child_process')
 const _ = require('lodash')
 const path = require('path')
 const fs = require('fs')
+const pluginLoader = require('./lib/plugin-loader')
 var low
 try {
   low = require('lowdb')
@@ -187,43 +188,36 @@ if (!opts['test']) startConnection().catch(e => {
   console.error('[wa] gagal memulai koneksi:', e)
 })
 
-// Plugin Loader
+// Plugin Loader (lib/plugin-loader.js) — rekursif, kunci = path relatif
 let pluginFolder = path.join(__dirname, 'plugins')
-let pluginFilter = filename => /\.js$/.test(filename)
-global.plugins = {}
-for (let filename of fs.readdirSync(pluginFolder).filter(pluginFilter)) {
-  try {
-    global.plugins[filename] = require(path.join(pluginFolder, filename))
-  } catch (e) {
-    console.error(e)
-    delete global.plugins[filename]
-  }
-}
+global.plugins = pluginLoader.loadPlugins(pluginFolder, {
+  onError: (e, key) => console.error(`gagal memuat plugin '${key}':`, e)
+})
 console.log(Object.keys(global.plugins))
 global.reload = (_event, filename) => {
-  if (pluginFilter(filename)) {
-    let dir = path.join(pluginFolder, filename)
-    if (dir in require.cache) {
-      delete require.cache[dir]
-      if (fs.existsSync(dir)) console.info(`re - require plugin '${filename}'`)
-      else {
-        console.warn(`deleted plugin '${filename}'`)
-        return delete global.plugins[filename]
-      }
-    } else console.info(`requiring new plugin '${filename}'`)
-    let err = syntaxerror(fs.readFileSync(dir), filename)
-    if (err) console.error(`syntax error while loading '${filename}'\n${err}`)
-    else try {
-      global.plugins[filename] = require(dir)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      global.plugins = Object.fromEntries(Object.entries(global.plugins).sort(([a], [b]) => a.localeCompare(b)))
+  let key = pluginLoader.toPluginKey(filename)
+  if (!key) return
+  let dir = path.join(pluginFolder, key)
+  if (dir in require.cache) {
+    delete require.cache[dir]
+    if (fs.existsSync(dir)) console.info(`re - require plugin '${key}'`)
+    else {
+      console.warn(`deleted plugin '${key}'`)
+      return delete global.plugins[key]
     }
+  } else console.info(`requiring new plugin '${key}'`)
+  let err = syntaxerror(fs.readFileSync(dir), key)
+  if (err) console.error(`syntax error while loading '${key}'\n${err}`)
+  else try {
+    global.plugins[key] = require(dir)
+  } catch (e) {
+    console.error(e)
+  } finally {
+    global.plugins = Object.fromEntries(Object.entries(global.plugins).sort(([a], [b]) => a.localeCompare(b)))
   }
 }
 Object.freeze(global.reload)
-fs.watch(path.join(__dirname, 'plugins'), global.reload)
+pluginLoader.watchPlugins(pluginFolder, global.reload)
 if (opts['test']) global.reloadHandler()
 
 
