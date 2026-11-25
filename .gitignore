@@ -29,4 +29,9 @@ package-lock.json
 
 # WhatsApp auth (Baileys 7)
 wa-auth/
+wa-auth.bak-*/
 pairing-code.txt
+
+# Log uji runtime
+bot-run.log
+pairing-run.log

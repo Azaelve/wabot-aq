@@ -238,6 +238,20 @@ Semua kode WhatsApp ada di `lib/wa/` dan tidak ada plugin yang boleh mengimpor `
 - `auth.js` — `useMultiFileAuthState` ke folder `wa-auth/` (bukan `session.data.json`).
 - `client.js` — `makeWASocket` + `requestPairingCode`; logger pino dan socket injectable.
 - `legacy.js` — `LegacyClient`: `sendMessage`/`sendFile`/`reply`/`sendButton`/`send2Button`/`groupMetadata`/`getProfilePicture`/`chatRead`/`relayWAMessage`/`downloadMedia`/`updateMediaMessage`.
+- `chats.js` — `ChatStore extends Map`: `all()` dan `get()` yang selalu memberi `{ jid, metadata, presences, read_only }`, pengganti `ChatManager` Baileys 3.x yang dipakai plugin (`speed`, `grouplist`, `broadcast`, `leavegc`, `scan`, `online`).
+- `lifecycle.js` — `detachListeners(emitter, entries)` (mengabaikan listener `undefined`) dan `reconnectDelay(attempt)` (5→10→20→…→60 dtk, maksimum 60 dtk).
 - `index.js` — `connect()`; memetakan event baru (`messages.upsert`, `group-participants.update`, `messages.update`, `call`, `connection.update`) ke event lama (`chat-update`, `message-delete`, `group-participants-update`, `CB:action,,call`, `close`).
 
 `lib/simple.js` sekarang hanya re-export `smsg`. Jalankan: `node . --pairing 6285178964685` (kode 8 karakter, juga ditulis ke `pairing-code.txt`), atau `node .` untuk QR. Tes: `npm test` = `node test.js` + `node --test tests/`.
+
+## Uji Login Nyata (2026-11-25)
+
+Pairing code dijalankan di VM dengan nomor `6285178964685` dan **berhasil**: `wa-auth/creds.json` menjadi `registered: true`, `me: 6285178964685:3@s.whatsapp.net`, dan bot menyambung sebagai `6285178964685@s.whatsapp.net`. Kode yang dipakai saat uji: `QV5BFVY3`.
+
+Tiga bug yang menghalangi login berfungsi ditemukan saat uji itu dan sudah diperbaiki:
+
+1. **Reconnect mematikan handler** — `main.js` memanggil `conn.off(event, conn.handler)` pada socket baru hasil reconnect, padahal handler-nya belum ada, sehingga muncul `ERR_INVALID_ARG_TYPE` dan handler tidak pernah terpasang lagi. Diperbaiki dengan `lib/wa/lifecycle.js` (`detachListeners`) plus pemasangan listener `error`/`close` per socket di `startConnection()` dan reconnect berjeda eksponensial dengan satu jadwal aktif.
+2. **Pesan pertama crash** — `handler.js` menulis default `settings` ke `global.db.data.settings[...]` tetapi variabel `setting` tetap `undefined`, jadi `setting.nyimak` melempar `TypeError`; blok `finally` lalu menutupinya dengan error kedua di `setting.autoread`. Sekarang objek default juga ditugaskan ke `setting` dan blok `finally` dijaga (`if (setting && setting.autoread)`).
+3. **`conn.chats.all is not a function`** — plugin lama memakai `ChatManager` Baileys 3.x. Ditambahkan `lib/wa/chats.js` (`ChatStore`) dan `LegacyClient` memakainya.
+
+Verifikasi: kirim `.ping` ke chat bot sendiri → perintah dijalankan dan dibalas, `grep -c TypeError bot-run.log` = 0, `npm test` lolos **39 tes** (termasuk `tests/wa-chats.test.js` dan `tests/wa-lifecycle.test.js`).

@@ -193,6 +193,8 @@ lib/wa/
   auth.js          # useMultiFileAuthState (folder wa-auth/)
   client.js        # makeWASocket + requestPairingCode (logger, socket injectable)
   legacy.js        # LegacyClient: sendMessage/sendFile/reply/sendButton/... di atas socket baru
+  chats.js         # ChatStore: all()/presences kompatibel ChatManager Baileys 3.x
+  lifecycle.js     # detachListeners + jeda reconnect eksponensial
   index.js         # connect(): sambungkan event Baileys 7 ke event lama (chat-update, dst.)
 ```
 
@@ -204,7 +206,30 @@ Tes: `npm test` menjalankan pemeriksaan sintaks seluruh berkas lalu `node --test
 node . --pairing 6285178964685
 ```
 
-Kode 8 karakter dicetak di terminal (dan disimpan di `pairing-code.txt`). Masukkan lewat **WhatsApp → Perangkat tertaut → Tautkan dengan nomor telepon**. Sesi tersimpan di folder `wa-auth/`, jadi setelah berhasil login cukup `node .` tanpa `--pairing`. Tanpa opsi `--pairing`, bot menampilkan QR seperti biasa (`--big-qr` untuk QR besar).
+Alur login yang sudah diuji (Node v26.13.1, Baileys 7.0.0-rc14):
+
+1. Bot menyambung ke server WhatsApp lalu meminta kode 8 karakter dan mencetaknya (juga disimpan di `pairing-code.txt`):
+
+   ```
+   ==================================================
+     KODE PAIRING WHATSAPP untuk +6285178964685
+     QV5BFVY3
+     Masukkan di WhatsApp > Perangkat tertaut >
+     Tautkan dengan nomor telepon.
+   ==================================================
+   ```
+
+2. Di HP buka **WhatsApp → Setelan → Perangkat tertaut → Tautkan perangkat → Tautkan dengan nomor telepon**, lalu masukkan kode tersebut. Kode hanya berlaku selama proses bot masih berjalan; bila kedaluwarsa, hentikan bot dan jalankan ulang perintahnya untuk kode baru.
+3. Setelah kode diterima, WhatsApp memutus koneksi sekali (`stream:error 515` berarti restart wajib). Bot menyambung ulang sendiri dan mencetak:
+
+   ```
+   [wa] handler terpasang (chat-update, message-delete, participants, call)
+   [wa] terhubung sebagai 6285178964685@s.whatsapp.net
+   ```
+
+4. Kredensial tersimpan di `wa-auth/` (`registered: true`), jadi login berikutnya cukup `node .` tanpa `--pairing` dan tanpa QR.
+
+Tanpa opsi `--pairing`, bot menampilkan QR di terminal (`--big-qr` untuk QR besar). Satu nomor sebaiknya dipakai satu proses bot saja — dua proses dengan sesi yang sama akan saling memutus.
 
 ## Catatan fork ini (v2.6.0)
 

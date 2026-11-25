@@ -92,26 +92,17 @@ module.exports = {
         }
 
         var setting = global.db.data.settings[this.user.jid]
-        if (typeof setting !== 'object') global.db.data.settings[this.user.jid] = {}
-        if (setting) {
-          if (!('anticall' in setting)) setting.anticall = false
-          if (!('autoread' in setting)) setting.autoread = false
-          if (!('nyimak' in setting)) setting.nyimak = false
-          if (!('restrict' in setting)) setting.restrict = false
-          if (!('self' in setting)) setting.self = false
-          if (!('pconly' in setting)) setting.pconly = false
-          if (!('gconly' in setting)) setting.gconly = false
-          if (!('jadibot' in setting)) setting.jadibot = false
-        } else global.db.data.settings[this.user.jid] = {
-          anticall: false,
-          autoread: false,
-          nyimak: false,
-          restrict: false,
-          self: false,
-          pconly: false,
-          gconly: false,
-          jadibot: false,
-        }
+        // Objek default harus juga ditugaskan ke `setting`, kalau tidak variabel
+        // ini tetap undefined dan pemakaian di bawahnya melempar TypeError.
+        if (typeof setting !== 'object' || setting === null) setting = global.db.data.settings[this.user.jid] = {}
+        if (!('anticall' in setting)) setting.anticall = false
+        if (!('autoread' in setting)) setting.autoread = false
+        if (!('nyimak' in setting)) setting.nyimak = false
+        if (!('restrict' in setting)) setting.restrict = false
+        if (!('self' in setting)) setting.self = false
+        if (!('pconly' in setting)) setting.pconly = false
+        if (!('gconly' in setting)) setting.gconly = false
+        if (!('jadibot' in setting)) setting.jadibot = false
       } catch (e) {
         console.error(e)
       }
@@ -352,7 +343,8 @@ module.exports = {
       } catch (e) {
         console.log(m, m.quoted, e)
       }
-      if (setting.autoread) await this.chatRead(m.chat).catch(() => { })
+      // Dijaga agar blok finally tidak menutupi error asli bila `setting` gagal disiapkan.
+      if (setting && setting.autoread) await this.chatRead(m.chat).catch(() => { })
     }
   },
   async participantsUpdate({ jid, participants, action }) {

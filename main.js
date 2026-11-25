@@ -3,6 +3,7 @@ const cloudDBAdapter = require('./lib/cloudDBAdapter')
 const { generate } = require('qrcode-terminal')
 const syntaxerror = require('syntax-error')
 const wa = require('./lib/wa')
+const { detachListeners, reconnectDelay } = require('./lib/wa/lifecycle')
 const { promisify } = require('util')
 const yargs = require('yargs/yargs')
 const Readline = require('readline')
@@ -95,10 +96,14 @@ let isInit = true
 global.reloadHandler = function () {
   let handler = require('./handler')
   if (!isInit) {
-    conn.off('chat-update', conn.handler)
-    conn.off('message-delete', conn.onDelete)
-    conn.off('group-participants-update', conn.onParticipantsUpdate)
-    conn.off('CB:action,,call', conn.onCall)
+    // Setelah reconnect `conn` adalah socket baru yang belum punya handler,
+    // jadi listener lama hanya dilepas bila memang pernah terpasang.
+    detachListeners(conn, [
+      ['chat-update', conn.handler],
+      ['message-delete', conn.onDelete],
+      ['group-participants-update', conn.onParticipantsUpdate],
+      ['CB:action,,call', conn.onCall],
+    ])
   }
   conn.welcome = 'Hai, @user!\nSelamat datang di grup @subject\n\n@desc'
   conn.bye = 'Selamat tinggal @user!'
@@ -112,20 +117,32 @@ global.reloadHandler = function () {
   conn.on('message-delete', conn.onDelete)
   conn.on('group-participants-update', conn.onParticipantsUpdate)
   conn.on('CB:action,,call', conn.onCall)
-  if (isInit) {
-    conn.on('error', console.error)
-    conn.on('close', () => {
-      setTimeout(async () => {
-        try {
-          if (!opts['test']) await startConnection()
-        } catch (e) {
-          console.error(e)
-        }
-      }, 5000)
-    })
-  }
   isInit = false
+  console.log('[wa] handler terpasang (chat-update, message-delete, participants, call)')
   return true
+}
+
+let reconnectAttempt = 0
+let reconnectTimer = null
+/**
+ * Jadwalkan reconnect dengan jeda eksponensial. Hanya satu jadwal aktif, dan
+ * listener `close` dipasang pada setiap socket baru di startConnection().
+ */
+function scheduleReconnect() {
+  if (opts['test'] || reconnectTimer) return
+  const delay = reconnectDelay(reconnectAttempt++)
+  console.warn(`[wa] koneksi tertutup, mencoba lagi dalam ${delay} ms`)
+  reconnectTimer = setTimeout(async () => {
+    reconnectTimer = null
+    try {
+      await startConnection()
+      reconnectAttempt = 0
+    } catch (e) {
+      console.error('[wa] reconnect gagal:', e.message)
+      scheduleReconnect()
+    }
+  }, delay)
+  return delay
 }
 
 /**
@@ -151,8 +168,16 @@ async function startConnection() {
   })
   global.conn = conn
   if (opts['server']) require('./server')(global.conn, PORT)
+  // Siklus hidup dipasang per socket: tanpa ini, socket hasil reconnect tidak
+  // pernah punya listener `close` dan bot berhenti menyambung ulang.
+  conn.on('error', console.error)
+  conn.on('close', status => {
+    console.warn('[wa] koneksi ditutup', status === undefined ? '' : `(status ${status})`)
+    scheduleReconnect()
+  })
   conn.on('open', () => {
     global.timestamp.connect = new Date
+    reconnectAttempt = 0
     console.log('[wa] terhubung sebagai', conn.user.jid)
   })
   global.reloadHandler()
