@@ -254,6 +254,22 @@ Tiga fitur yang belum ada di wabot-aq, ditulis sebagai modul murni yang dapat di
 
 Tes: `tests/permission.test.js`, `tests/cooldown.test.js`, `tests/sticker-exif.test.js` (termasuk WebP sintetis untuk membuktikan `addExif`/`readExif`). Total `npm test` saat ini **63 tes lolos**.
 
+## Pengaturan per Grup (2026-11-25)
+
+`lib/group-settings.js` adalah satu-satunya pemilik bentuk pengaturan per grup. Data disimpan di `global.db.data.chats[jid].settings`:
+
+```js
+{ features: { antilink: false }, prefix: 'multi', language: 'id' }
+```
+
+- Fungsi murni: `normalizeLanguage`, `normalizePrefix`, `normalizeFeatureName`, `toBoolean`, `createSettings` (idempoten, mengisi bawaan dan membuang isian rusak), `updateSettings` (mengembalikan `{ settings, changed, errors }`, `feature` tanpa `enabled` membalik saklar), `isFeatureEnabled`, `resolvePrefix`, `resolveLanguage`, `translate`, `failMessage`.
+- `handler.js` menormalkan `chat.settings` sekali per pesan. Prefix grup dipakai saat mencocokkan perintah (`resolvePrefix(chatSettings, conn.prefix || global.prefix)`, `none` menjadi `/(?!)/`), dan plugin yang punya `handler.feature` dilewati bila grup mematikan fitur itu (`_antilink`, `_antisticker`, `_antispam`, `_antivirus`, `_antitroli`, `_simi`). Flag lama seperti `chat.antiLink` tetap mengatur perilaku di dalam modul, jadi keduanya tidak saling menimpa.
+- Bahasa dipakai `global.dfail` lewat `failMessage(type, lang)`, jadi pesan penolakan ikut bahasa grup (`id`/`en`). Daftar fitur yang boleh diubah ada di `FEATURES`.
+- Perintahnya `plugins/grup-setting.js` (`.grup`, staff/owner, hanya di grup): `.grup` untuk melihat, lalu `prefix <karakter|none|multi>`, `bahasa <id|en>`, `fitur <nama> [on|off]`, dan `reset`.
+- `plugins/_buttonResponse.js` juga memakai prefix grup agar tombol mengikuti perintah teks.
+
+Tes: `tests/group-settings.test.js`. Total suite sekarang **81 tes lolos** (Node v24 di VM ini menjalankan `node --test tests/*.test.js`; `node --test tests/` gagal mengenali direktori pada versi tersebut — bukan karena kode).
+
 ## Uji Login Nyata (2026-11-25)
 
 Pairing code dijalankan di VM dengan nomor `6285178964685` dan **berhasil**: `wa-auth/creds.json` menjadi `registered: true`, `me: 6285178964685:3@s.whatsapp.net`, dan bot menyambung sebagai `6285178964685@s.whatsapp.net`. Kode yang dipakai saat uji: `QV5BFVY3`.

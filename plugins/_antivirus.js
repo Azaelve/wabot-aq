@@ -1,5 +1,6 @@
 let handler = m => m
 
+handler.feature = 'antivirus'
 handler.all = async function (m, { isBotAdmin }) {
     if (m.messageStubType === 68) { //Auto clear jika terdapat pesan yg tidak dapat dilihat oleh whatsapp web
         let log = {

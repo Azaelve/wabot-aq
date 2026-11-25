@@ -1,5 +1,6 @@
 let linkRegex = /chat.whatsapp.com\/(?:invite\/)?([0-9A-Za-z]{20,24})/i
 module.exports = {
+  feature: 'antilink',
   before(m, { isAdmin, isBotAdmin }) {
     if (m.isBaileys && m.fromMe) return true
     let chat = global.db.data.chats[m.chat]

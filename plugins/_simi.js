@@ -2,6 +2,7 @@ let fetch = require('node-fetch')
 
 let handler = m => m
 
+handler.feature = 'simi'
 handler.before = async (m) => {
     let chat = db.data.chats[m.chat]
     if (chat.simi && !chat.isBanned) {

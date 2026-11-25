@@ -3,6 +3,7 @@ By : Aine
 */
 let handler = m => m
 
+handler.feature = 'antisticker'
 handler.before = function (m, { isAdmin, isBotAdmin }) {
   if (m.isBaileys && m.fromMe) return true
   let chat = global.db.data.chats[m.chat]

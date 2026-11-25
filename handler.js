@@ -3,6 +3,13 @@ let simple = require('./lib/simple')
 let { MessageType } = require('./lib/wa/message-type')
 let { resolveRoles, checkAccess } = require('./lib/permission')
 let { createCooldown } = require('./lib/cooldown')
+let {
+  createSettings,
+  isFeatureEnabled,
+  resolvePrefix,
+  resolveLanguage,
+  failMessage,
+} = require('./lib/group-settings')
 
 // Cooldown per perintah; direset saat handler dimuat ulang.
 const cooldown = createCooldown()
@@ -94,7 +101,10 @@ module.exports = {
           getmsg: false,
           simi: false,
           viewonce: false,
+          settings: createSettings(),
         }
+        // Prefix, bahasa, dan saklar fitur per grup disimpan di sini.
+        global.db.data.chats[m.chat].settings = createSettings(global.db.data.chats[m.chat].settings)
 
         var setting = global.db.data.settings[this.user.jid]
         // Objek default harus juga ditugaskan ke `setting`, kalau tidak variabel
@@ -116,10 +126,12 @@ module.exports = {
       if (setting.pconly && m.chat.endsWith('g.us')) return
       if (setting.gconly && !m.chat.endsWith('g.us')) return
       if (typeof m.text !== 'string') m.text = ''
+      let chatSettings = createSettings((global.db.data.chats[m.chat] || {}).settings)
       for (let name in global.plugins) {
         let plugin = global.plugins[name]
         if (!plugin) continue
         if (plugin.disabled) continue
+        if (plugin.feature && !isFeatureEnabled(chatSettings, plugin.feature)) continue
         if (!plugin.all) continue
         if (typeof plugin.all !== 'function') continue
         try {
@@ -158,9 +170,11 @@ module.exports = {
         let plugin = global.plugins[name]
         if (!plugin) continue
         if (plugin.disabled) continue
+        if (plugin.feature && !isFeatureEnabled(chatSettings, plugin.feature)) continue
         if (!setting.restrict) if (plugin.tags && plugin.tags.includes('admin')) continue
         const str2Regex = str => str.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&')
-        let _prefix = plugin.customPrefix ? plugin.customPrefix : conn.prefix ? conn.prefix : global.prefix
+        // Prefix bisa berbeda per grup; `multi` memakai prefix global.
+        let _prefix = plugin.customPrefix ? plugin.customPrefix : m.isGroup ? resolvePrefix(chatSettings, conn.prefix || global.prefix) : conn.prefix ? conn.prefix : global.prefix
         let match = (_prefix instanceof RegExp ? // RegExp Mode?
           [[_prefix.exec(m.text), _prefix]] :
           Array.isArray(_prefix) ? // Array?
@@ -429,18 +443,16 @@ Untuk mematikan fitur ini, ketik
 }
 
 global.dfail = (type, m, conn) => {
-  let msg = {
-    rowner: 'Perintah ini hanya dapat digunakan oleh _*OWWNER!1!1!*_',
-    owner: 'Perintah ini hanya dapat digunakan oleh _*Owner Bot*_!',
-    mods: 'Perintah ini hanya dapat digunakan oleh _*Moderator*_ !',
-    staff: 'Perintah ini hanya dapat digunakan oleh _*Staff Bot*_ !',
-    premium: 'Perintah ini hanya untuk member _*Premium*_ !',
-    group: 'Perintah ini hanya dapat digunakan di grup!',
-    private: 'Perintah ini hanya dapat digunakan di Chat Pribadi!',
-    admin: 'Perintah ini hanya untuk *Admin* grup!',
-    botAdmin: 'Jadikan bot sebagai *Admin* untuk menggunakan perintah ini!',
-    unreg: 'Silahkan daftar untuk menggunakan fitur ini dengan cara mengetik:\n\n*#daftar nama.umur*\n\nContoh: *#daftar Manusia.16*'
-  }[type]
+  // Pesan gagal mengikuti bahasa yang dipilih untuk grup ini.
+  let lang
+  try {
+    let chats = global.db && global.db.data && global.db.data.chats
+    let chat = chats && chats[m.chat]
+    lang = resolveLanguage(chat && chat.settings)
+  } catch (e) {
+    lang = undefined
+  }
+  let msg = failMessage(type, lang)
   if (msg) return m.reply(msg)
 }
 

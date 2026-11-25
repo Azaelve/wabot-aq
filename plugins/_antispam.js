@@ -4,6 +4,7 @@ const { createSpamGuard } = require('../lib/cooldown')
 const guard = createSpamGuard({ limit: 10, windowMs: 10000 })
 
 module.exports = {
+  feature: 'antispam',
   async all(m) {
     if (!m.message || m.fromMe) return
     const res = guard.check(m.sender)
