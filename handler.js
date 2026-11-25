@@ -369,8 +369,8 @@ module.exports = {
               pp = await this.getProfilePicture(user)
             } catch (e) {
             } finally {
-              text = (action === 'add' ? (chat.sWelcome || this.welcome || conn.welcome || 'Welcome, @user!').replace('@subject', this.getName(jid)).replace('@desc', groupMetadata.desc) :
-                (chat.sBye || this.bye || conn.bye || 'Bye, @user!')).replace('@user', '@' + user.split('@')[0])
+              text = (action === 'add' ? (chat.sWelcome || this.welcome || global.conn.welcome || 'Welcome, @user!').replace('@subject', this.getName(jid)).replace('@desc', groupMetadata.desc) :
+                (chat.sBye || this.bye || global.conn.bye || 'Bye, @user!')).replace('@user', '@' + user.split('@')[0])
               this.sendFile(jid, pp, 'pp.jpg', text, null, false, {
                 contextInfo: {
                   mentionedJid: [user]
@@ -381,27 +381,28 @@ module.exports = {
         }
         break
       case 'promote':
-        text = (chat.sPromote || this.spromote || conn.spromote || '@user ```is now Admin```')
+        text = (chat.sPromote || this.spromote || global.conn.spromote || '@user ```is now Admin```')
       case 'demote':
-        if (!text) text = (chat.sDemote || this.sdemote || conn.sdemote || '@user ```is no longer Admin```')
+        if (!text) text = (chat.sDemote || this.sdemote || global.conn.sdemote || '@user ```is no longer Admin```')
         text = text.replace('@user', '@' + participants[0].split('@')[0])
-        if (chat.detect) m.reply(text)
+        if (chat.detect) await this.reply(jid, text)
         break
     }
   },
   async delete(m) {
     if (m.key.fromMe) return
-    let chat = global.db.data.chats[m.key.remoteJid]
-    if (chat.delete) return
+    let chat = global.db.data.chats[m.key.remoteJid] || {}
+    if (!chat.delete) return
     await this.sendButton(m.key.remoteJid, `
 Terdeteksi @${m.participant.split`@`[0]} telah menghapus pesan
 
 Untuk mematikan fitur ini, ketik
-*.enable delete*
-`.trim(), '© wabot-aq', 'Matikan', '.1 delete', m.message)
+*.disable delete*
+`.trim(), '© wabot-aq', 'Matikan', '.0 delete', m.message)
     this.copyNForward(m.key.remoteJid, m.message).catch(e => console.log(e, m))
   },
   async onCall(json) {
+    let setting = global.db.data.settings[this.user.jid] || {}
     if (!setting.anticall) return
     let jid = json[2][0][1]['from']
     let isOffer = json[2][0][2][0][0] == 'offer'
@@ -420,7 +421,7 @@ Untuk mematikan fitur ini, ketik
         'count': '0'
       }, null]]]]
       this.sendJSON(nodePayload, tag)
-      m.reply('Dimohon untuk tidak menelpon bot!')
+      this.reply(jid, 'Dimohon untuk tidak menelpon bot!')
     }
   }
 }

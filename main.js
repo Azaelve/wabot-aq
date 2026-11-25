@@ -52,6 +52,8 @@ if (!opts['test']) setInterval(async () => {
   await global.db.write()
 }, 60 * 1000) // Save every minute
 if (opts['server']) require('./server')(global.conn, PORT)
+// API lokal pengganti layanan yang sudah mati (lihat lib/localapi.js)
+require('./lib/localapi').start(global.localAPIPort)
 
 conn.user = {
   jid: '',

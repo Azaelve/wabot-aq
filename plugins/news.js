@@ -11,10 +11,12 @@ ${json.artikel}\n\n
 ${json.url}
   `.trim(), m)
 }
-handler.help = ['detik', 'kompas', 'liputan6', 'tribun', 'jalantikus']
+handler.help = ['cnn', 'antara', 'republika', 'cnbc', 'detik', 'kompas', 'liputan6', 'tribun', 'jalantikus']
 handler.tags = ['berita']
 
-handler.command = /^detik|kompas|liputan6|tribun|jalantikus$/i
+// cnn/antara/republika/cnbc punya feed RSS yang aktif; sisanya belum punya
+// sumber yang bisa diakses dan akan dibalas pesan jelas oleh API lokal.
+handler.command = /^(cnn|antara|republika|cnbc|detik|kompas|liputan6|tribun|jalantikus)$/i
 
 
 module.exports = handler

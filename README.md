@@ -1,8 +1,11 @@
 # wabot-aq
 
-Simple WhatsApp Bot
+Simple WhatsApp Bot — **fork Azaelve**, versi `2.6.0`
 
-[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/Nurutomo/wabot-aq)
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/Azaelve/wabot-aq)
+
+> Fork ini melanjutkan [Nurutomo/wabot-aq](https://github.com/Nurutomo/wabot-aq) yang sudah tidak dirawat sejak 27 Juni 2021.
+> Semua kredit untuk kode asli tetap milik penulisnya — lihat bagian [Credit](#credit).
 
 ## FOR TERMUX/UBUNTU/SSH USER
 
@@ -12,7 +15,7 @@ apt install git -y
 apt install nodejs -y
 apt install ffmpeg -y
 apt install imagemagick -y
-git clone https://github.com/Nurutomo/wabot-aq
+git clone https://github.com/Azaelve/wabot-aq
 cd wabot-aq
 npm install
 npm update
@@ -47,7 +50,7 @@ apt install wget curl git ffmpeg imagemagick build-essential libcairo2-dev libpa
 ubuntu
 curl -fsSL https://deb.nodesource.com/setup_current.x | sudo -E bash -
 apt install -y nodejs gcc g++ make
-git clone https://github.com/Nurutomo/wabot-aq
+git clone https://github.com/Azaelve/wabot-aq
 cd wabot-aq
 npm install
 npm update
@@ -63,7 +66,7 @@ npm update
 * Download And Install ImageMagick [`Click Here`](https://imagemagick.org/script/download.php)
 
 ```bash
-git clone https://github.com/Nurutomo/wabot-aq
+git clone https://github.com/Azaelve/wabot-aq
 cd wabot-aq
 npm install
 npm update
@@ -149,7 +152,7 @@ conn.logger.level = 'debug'
 
 ## Settings
 
-Now set using switch [enable.js](https://github.com/Nurutomo/wabot-aq/blob/master/plugins/enable.js), among others are
+Now set using switch [enable.js](https://github.com/Azaelve/wabot-aq/blob/Azl/plugins/enable.js), among others are
 
 ```js
 anticall: false, // Auto Reject better than autoblock
@@ -164,12 +167,45 @@ jadibot: false,
 
 ---------
 
-<a href="https://api.xteam.xyz"><img src="https://i.ibb.co/7j0vtwz/xlogo.png" width="100" height="100"></a> | [![Nurutomo](https://github.com/Nurutomo.png?size=100)](https://github.com/Nurutomo) | [![Ariffb](https://github.com/ariffb25.png?size=100)](https://github.com/ariffb25) | [![Ftwrr](https://github.com/Ftwrr.png?size=100)](https://github.com/Ftwrr) 
+## Credit
+
+[![Azaelve](https://github.com/Azaelve.png?size=100)](https://github.com/Azaelve) | [![Nurutomo](https://github.com/Nurutomo.png?size=100)](https://github.com/Nurutomo) | [![Ariffb](https://github.com/ariffb25.png?size=100)](https://github.com/ariffb25) | [![Ftwrr](https://github.com/Ftwrr.png?size=100)](https://github.com/Ftwrr)
 ----|----|----|----
-[XTEAM](https://api.xteam.xyz/) | [Nurutomo](https://github.com/Nurutomo) | [Ariffb](https://github.com/ariffb25) | [Ftwrr](https://github.com/Ftwrr)
-Powered by XTEAM | Author / Creator | Most Active Contributor | 2nd Most Active Contributor
+[Azaelve](https://github.com/Azaelve) | [Nurutomo](https://github.com/Nurutomo) | [Ariffb](https://github.com/ariffb25) | [Ftwrr](https://github.com/Ftwrr)
+**Pemelihara fork ini** | Author / Creator | Most Active Contributor | 2nd Most Active Contributor
 
+- **Fork & pemeliharaan:** [Azaelve](https://github.com/Azaelve) — [Azaelve/wabot-aq](https://github.com/Azaelve/wabot-aq)
+- **Kode asli:** [Nurutomo](https://github.com/Nurutomo) — [Nurutomo/wabot-aq](https://github.com/Nurutomo/wabot-aq)
+- **Kontributor:** [Ariffb](https://github.com/ariffb25), [Ftwrr](https://github.com/Ftwrr)
+- **API lokal & scraper di fork ini:** dibangun ulang sebagai pengganti host pihak ketiga yang sudah mati (XTEAM, Zahir, Zeks, LeysCoder, Nurutomo API) — sekarang berjalan di `lib/localapi.js` + `lib/scrapers.js` milik sendiri.
 
-NOTE: This project will not maintained after `27 June 2021`, that means no update. Feel free to anyone to continue this project :)
+## Catatan fork ini (v2.6.0)
+
+Host API lama (`api.xteam.xyz`, `zahirr-web.herokuapp.com`, `api.zeks.xyz`, `leyscoders-api.herokuapp.com`, `nurutomo.herokuapp.com`) sudah mati, jadi fork ini tidak lagi bergantung padanya:
+
+- **API lokal** dijalankan otomatis oleh `main.js` di `http://127.0.0.1:3001` (bisa diubah lewat env `LOCAL_API_PORT`). Berisi bank soal game, proxy Wikipedia/Aladhan/thum.io/tikwm, dan fallback 503 yang jelas untuk fitur yang belum punya penyedia.
+- **Scraper sendiri**: KBBI (`/kbbi`), kode pos (`/kodepos`), resep (`/api/resep-masak`), berita RSS `cnn`/`antara`/`republika`/`cnbc` (`/news/:sumber`).
+
+Struktur API lokal mengikuti prinsip SOLID — tiap bagian punya satu tanggung jawab, dan endpoint baru cukup didaftarkan di registry:
+
+```
+lib/api/
+  http.js          # satu-satunya tempat pemanggilan jaringan
+  errors.js        # ApiError + asyncHandler
+  data/            # bank soal game, daftar daerah (tanpa I/O)
+  scrapers/        # kbbi.js, kodepos.js, resep.js, berita.js
+  routes/          # satu modul per kelompok endpoint + index.js (registry)
+  server.js        # createApp(): rakit route, fallback 503, error handler
+  index.js         # start()
+lib/localapi.js    # facade lama -> lib/api
+lib/scrapers.js    # facade lama -> lib/api/scrapers
+```
+
+Menambah endpoint: buat modul di `lib/api/routes/` yang mengekspor `{ name, path, createRouter }`, daftarkan di `lib/api/routes/index.js`. `server.js` tidak perlu diubah.
+- **Sticker** tidak lagi memanggil host luar: `lib/sticker.js` memakai ffmpeg atau ImageMagick/GraphicsMagick saja.
+- **Keamanan:** backdoor `plugins/..js` dihapus, anti-delete/participantsUpdate/onCall diperbaiki, dan beberapa bug flag `enable.js` dibetulkan.
+- **Dependensi:** `@adiwajshing/baileys` dipatok `3.5.3`, `xmldom` diganti `@xmldom/xmldom`, `request` diganti `got`, ditambah `axios`/`qs`/`steno`.
+
+Dokumentasi internal (peta proyek, status API, daftar fitur yang masih butuh pihak ketiga): [AGENTS.md](AGENTS.md).
 
 Best Regards. wabot-aq
