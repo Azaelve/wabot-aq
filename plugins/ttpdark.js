@@ -1,14 +1,13 @@
-const fetch = require('node-fetch')
 const { sticker } = require('../lib/sticker')
 const { MessageType } = require('../lib/wa/message-type')
 
 let handler = async (m, { conn, text }) => {
   try {
     let teks = text ? text : m.quoted && m.quoted.text ? m.quoted.text : m.text
-    let url = await fetch(global.API('https://salism3api.pythonanywhere.com', '/text2img/', { text: teks, outlineColor: '255,0,0,255', textColor: '0,0,0,255' }))
-    res = await url.json()
-    stick = res.image
-    let stiker = await sticker(null, stick, global.packname, global.author)
+    // Rute lokal /ttp (api.jaky.dev). Warna outline khas ttpdark tidak
+    // didukung padanan ini, jadi tampilan mengikuti kartu kutipan bawaan.
+    let stiker = await sticker(null, global.API('local', '/ttp', { text: teks }), global.packname, global.author)
+    if (!stiker) throw false
     conn.sendMessage(m.chat, stiker, MessageType.sticker, {
       quoted: m
     })

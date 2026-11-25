@@ -2,7 +2,19 @@ const fs = require('fs')
 const path = require('path')
 const { MessageType } = require('../lib/wa/message-type')
 const { sticker } = require('../lib/sticker')
-const { isAudioMedia, planStickerAudio } = require('../lib/sticker-audio')
+const {
+  isAudioMedia,
+  planStickerAudio,
+  createAudioConfig,
+  checkDuration,
+  checkSize,
+} = require('../lib/sticker-audio')
+
+// Batas audio stiker (lihat lib/sticker-audio.js).
+const audioLimits = createAudioConfig({
+  maxSeconds: process.env.STICKER_AUDIO_MAX_SECONDS,
+  maxBytes: process.env.STICKER_AUDIO_MAX_BYTES,
+})
 
 // Stiker penanda yang dikirim bersama audio aslinya.
 const audioCover = () => fs.readFileSync(path.join(__dirname, '../src/sticker-audio.jpg'))
@@ -13,8 +25,15 @@ let handler = async (m, { conn, args, usedPrefix, command }) => {
 
   // Balas voice note: kirim stiker penanda lalu audio aslinya.
   if (isAudioMedia(media)) {
+    let durasi = checkDuration(Number(media.seconds || 0), audioLimits.maxSeconds)
+    if (!durasi.ok) return m.reply(durasi.message)
+
     let audio = await q.download()
     if (!audio) throw `balas voice note dengan caption *${usedPrefix + command}*`
+
+    let ukuran = checkSize(audio.length, audioLimits.maxBytes)
+    if (!ukuran.ok) return m.reply(ukuran.message)
+
     let stiker = await sticker(audioCover(), false, global.packname, global.author)
     for (let step of planStickerAudio({ sticker: stiker, audio, media })) {
       if (step.kind === 'sticker') await conn.sendMessage(m.chat, step.content, MessageType.sticker, { quoted: m })

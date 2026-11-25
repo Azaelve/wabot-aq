@@ -1,15 +1,12 @@
-const uploadImage = require('../lib/uploadImage')
-const fetch = require('node-fetch')
 const { sticker } = require('../lib/sticker')
 const { MessageType } = require('../lib/wa/message-type')
 
 let handler = async (m, { conn, text }) => {
   try {
     let teks = text ? text : m.quoted && m.quoted.text ? m.quoted.text : m.text
-    let url = await fetch(global.API('https://salism3api.pythonanywhere.com', '/text2gif/', { text: teks }))
-    res = await url.json()
-    stick = res.image
-    let stiker = await sticker(null, stick, global.packname, global.author)
+    // Rute lokal /attp → /v1/canvas/brat?animation=true (GIF teks animasi).
+    let stiker = await sticker(null, global.API('local', '/attp', { text: teks }), global.packname, global.author)
+    if (!stiker) throw false
     conn.sendMessage(m.chat, stiker, MessageType.sticker, {
       quoted: m
     })

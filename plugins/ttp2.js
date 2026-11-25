@@ -1,14 +1,12 @@
-const fetch = require('node-fetch')
 const { sticker } = require('../lib/sticker')
 const { MessageType } = require('../lib/wa/message-type')
 
 let handler = async (m, { conn, text }) => {
   try {
     let teks = text ? text : m.quoted && m.quoted.text ? m.quoted.text : m.text
-    let url = await fetch(global.API('https://salism3api.pythonanywhere.com', '/text2img/', { text: teks }))
-    res = await url.json()
-    stick = res.image
-    let stiker = await sticker(null, stick, global.packname, global.author)
+    // Rute lokal /ttp meneruskan ke api.jaky.dev; salism3api sudah mati.
+    let stiker = await sticker(null, global.API('local', '/ttp', { text: teks }), global.packname, global.author)
+    if (!stiker) throw false
     conn.sendMessage(m.chat, stiker, MessageType.sticker, {
       quoted: m
     })

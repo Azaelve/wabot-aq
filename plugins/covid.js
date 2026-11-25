@@ -1,17 +1,24 @@
 let fetch = require('node-fetch')
+
+// covid19.mathdro.id sudah mati; disease.sh masih hidup (dicek 2026-11-26).
 let handler = async (m, { args, usedPrefix, command }) => {
-    let res = await fetch(global.API('https://covid19.mathdro.id', '/api/countries/'+ (args[0] || '')))
-    if (!res.ok) throw await res.text()
+    if (!args[0]) {
+        let res = await fetch('https://disease.sh/v3/covid-19/countries')
+        if (!res.ok) throw await res.text()
         let json = await res.json()
-    if (!args[0]) throw `Contoh :\n${usedPrefix}${command} ID\n\n` + json.countries.map((v) => `${v.name} : ${v.iso2} / ${v.iso3}`).join('\n')
-  if (json.confirmed) m.reply(`
-Countries : ${args[0]}
-Confirmed : ${json.confirmed.value}
-Recovered : ${json.recovered.value}
-Deaths : ${json.deaths.value}
-Last Update : ${json.lastUpdate}
-\n\n@Fatur`.trim())
-  else throw json
+        throw `Contoh :\n${usedPrefix}${command} Indonesia\n\n` + json.map((v) => `${v.country} : ${v.countryInfo.iso2} / ${v.countryInfo.iso3}`).join('\n')
+    }
+    let res = await fetch('https://disease.sh/v3/covid-19/countries/' + encodeURIComponent(args[0]))
+    if (!res.ok) throw await res.text()
+    let json = await res.json()
+    if (json.cases) m.reply(`
+Countries : ${json.country}
+Confirmed : ${json.cases}
+Recovered : ${json.recovered}
+Deaths : ${json.deaths}
+Last Update : ${new Date(json.updated).toLocaleString('id-ID')}
+`.trim())
+    else throw json
 }
 handler.help = ['covid'].map(v => v + ' <negara>')
 handler.tags = ['internet']

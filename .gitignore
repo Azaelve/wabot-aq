@@ -35,3 +35,6 @@ pairing-code.txt
 # Log uji runtime
 bot-run.log
 pairing-run.log
+
+# Sisa penunjuk worktree dari lingkungan lain, bukan bagian repo ini
+.git.bak

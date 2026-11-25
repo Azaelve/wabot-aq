@@ -135,12 +135,14 @@ Hasil: 13 berkas disentuh, 1 berkas dihapus, perilaku tidak berubah (17 kasus ru
 
 ## Batasan / Catatan
 
-- Bot tidak dijalankan (butuh sesi WhatsApp nyata); verifikasi hanya syntax + logika statis.
-- Dependensi Baileys adalah fork lama `github:melcanz/baileys`; upgrade butuh refactor `lib/simple.js`.
+- Verifikasi rutin: `npm test` (syntax check + `node --test tests/`) dan uji HTTP langsung ke `createApp()` tanpa membuka port. Bot juga sudah pernah login nyata lewat pairing code, lihat bagian "Uji Login Nyata".
+- Baileys sudah pindah ke paket npm `baileys` 7.x; `lib/simple.js` kini hanya re-export `smsg` dan seluruh kode WhatsApp ada di `lib/wa/`, lihat bagian "Lapisan WhatsApp (v2.7.0, Baileys 7)".
 
 ## Audit Dependensi WhatsApp (2026-11-25)
 
-`package.json` hanya punya satu pustaka WhatsApp: `"@adiwajshing/baileys": "github:melcanz/baileys"`. Tidak ada `whatsapp-web.js`, `venom-bot`, atau fork lain. Tidak ada lockfile dan `node_modules` belum terpasang.
+### Catatan historis pemilihan paket WhatsApp
+
+`package.json` dulu hanya punya satu pustaka WhatsApp: `"@adiwajshing/baileys": "github:melcanz/baileys"`. Tidak ada `whatsapp-web.js`, `venom-bot`, atau fork lain. Sejak migrasi ke `baileys` 7.x bagian ini hanya sejarah; `node_modules` sudah terpasang (674 paket, `package-lock.json` ada di repo).
 
 Uji nyata (Node v26.13.1):
 
@@ -185,7 +187,7 @@ Dicek ke registry npm (versi terbaru + status deprecated) dan diuji `require()` 
 | Paket | Kondisi | Pengganti | Effort |
 |---|---|---|---|
 | `request` (dipakai `lib/simple.js:1098` sebagai stream, dan `plugins/artinama.js`) | deprecated resmi, tidak ada di `package.json` | `got.stream()` (got@11 sudah jadi dependensi) atau `axios`/`undici` | 2 file, kecil |
-| `@adiwajshing/baileys` (fork melcanz) | deprecated, API 3.x | `@adiwajshing/baileys@3.5.3` npm (drop-in, terverifikasi) atau `baileys`/`@whiskeysockets/baileys@7.0.0-rc14`, `@itsukichan/baileys@7.3.2` (perlu refactor) | drop-in: 1 baris; 7.x: refactor besar |
+| `@adiwajshing/baileys` (fork melcanz) | deprecated, API 3.x | **Selesai**: paket `baileys` 7.x dipakai, kode WhatsApp dipindah ke `lib/wa/` | — |
 | `xmldom@0.6.0` (`lib/welcome.js`) | tidak dirawat, ada CVE | `@xmldom/xmldom@0.9.12` — API sama (`DOMImplementation`, `XMLSerializer`), sudah diuji | 1 baris |
 
 **Usang tapi masih CJS dan jalan — jangan asal naik mayor:** `node-fetch@2`, `got@11`, `chalk@4`, `lowdb@2`, `file-type@16`, `yargs@17`, `terminal-image@2`, `jsdom@16`. Versi terbarunya ESM-only (Node 26 bisa `require()` tapi hasilnya namespace, harus `.default`), jadi upgrade = ubah kode.
@@ -294,3 +296,31 @@ Tiga bug yang menghalangi login berfungsi ditemukan saat uji itu dan sudah diper
 3. **`conn.chats.all is not a function`** — plugin lama memakai `ChatManager` Baileys 3.x. Ditambahkan `lib/wa/chats.js` (`ChatStore`) dan `LegacyClient` memakainya.
 
 Verifikasi: kirim `.ping` ke chat bot sendiri → perintah dijalankan dan dibalas, `grep -c TypeError bot-run.log` = 0, `npm test` lolos **39 tes** (termasuk `tests/wa-chats.test.js` dan `tests/wa-lifecycle.test.js`).
+
+## Lanjutan 2026-11-26 — Klien Jaky dan Batas Stiker Audio
+
+### `lib/api/jaky.js` + `lib/api/routes/jaky.js`
+
+Klien tipis untuk `https://api.jaky.dev` (api key dibaca dari env `Zennith`, fallback `ZENNITH`, dikirim sebagai header `x-jaky-key`, timeout 25 dtk). Bagian murni/injectable supaya bisa diuji tanpa jaringan: `apiKey`, `isConfigured`, `buildUrl`, `unwrap`, `request` (menerima `fetchJSON` dan `env` palsu), `requestResult`. Envelope `{ status, code, latency, result }` dibongkar `unwrap`; `status: false` → `Error(msg)`.
+
+Route-nya didaftarkan **paling akhir** di `lib/api/routes/index.js` dengan `path: '/'`, jadi router ini hanya menangkap path yang belum ditangani route lokal lain (tiktok, ig, soundcloud, kbbi, kodepos, resep, news). Dua kelompok endpoint:
+
+- **Alias legacy** — bentuk respons dinormalisasi agar plugin lama tetap cocok: `/dl/twitter`, `/dl/fb`, `/api/spotify`, `/dl/spotify`, `/dl/ig`, `/dl/instagram`, stalker IG, dan seterusnya.
+- **Passthrough** — AI (`/ai/removebg`, `/ai/upscale`, `/ai/text2image`), tools (`/tools/qr`, `/tools/shorturl`), canvas (`/canvas/brat`, `/canvas/quote`), internet (`/internet/news|cuaca|gempa`), wildcard `islami`/`lyrics`/`stalker`/`anime`, download tambahan (`threads`, `youtube`, `play`, `pinterest`, `capcut`, `mediafire`, `mega`, `krakenfiles`), pencarian (`/search/youtube`, `/search/kbbi`), plus jaring umum `/jaky/*` → `/v1/*`.
+
+Middleware di router itu memeriksa key sekali; tanpa key **semua** path membalas 503 berisi pesan cara menyetelnya (termasuk path tak dikenal, karena middleware berjalan sebelum fallback 503 server).
+
+### Batas audio stiker
+
+`lib/sticker-audio.js` menambah `DEFAULT_MAX_SECONDS` (10 detik), `DEFAULT_MAX_BYTES` (30 MiB), `createAudioConfig(overrides)` (nilai bukan angka/negatif jatuh ke default, `0` berarti tanpa batas), `checkDuration(seconds, maxSeconds)`, dan `checkSize(bytes, maxBytes)` — semuanya murni. `plugins/sticker.js` kini memakainya di cabang voice note: durasi diperiksa sebelum unduh, ukuran setelah unduh, dan batasnya bisa diubah lewat env `STICKER_AUDIO_MAX_SECONDS` / `STICKER_AUDIO_MAX_BYTES`. Tes: `tests/sticker-audio.test.js`.
+
+### Verifikasi sesi 2026-11-26
+
+- `npm test` lolos **120 tes**; `node test.js` lolos syntax check seluruh berkas JS.
+- Uji HTTP langsung ke `createApp()` pada port 3999 (tanpa membuka port lewat `lib/api/index.js`): tanpa key `/health` → 200, lalu `/tools/qr?text=x`, `/dl/twitter?url=x`, dan path tak dikenal → 503 "Secret Zennith belum diset"; dengan key dummy `/tools/qr` → 400 "Parameter text wajib diisi" dan path tak dikenal → 503 fallback "belum punya penyedia pengganti". Jadi urutan registry tidak menelan `/health`.
+
+### Belum dikerjakan (setelah 2026-11-26)
+
+- 83 pemanggilan `global.API(...)` di 79 berkas `plugins/` masih menunjuk ke host mati. Alias Jaky baru menutup sebagian jalur download/stalker; yang belum punya passthrough, mis. `/videomaker/*`, `/attp`, `/ephoto`, `/ttp`, `/textpro`, `/asupan/*`.
+- Key `Zennith` belum diset, jadi seluruh rute Jaky masih 503 sampai owner mengisinya.
+- Paket deprecated di `package.json` (`colors`, `human-readable`, `similarity`, `url-regex`, `translate-google-api`, `node-gtts`, `g-i-s`, `google-it`, `qrcode-terminal`, `syntax-error`) belum diganti, padahal penggantinya sudah terverifikasi di bagian "Pengganti Dependensi Usang".
