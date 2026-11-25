@@ -101,10 +101,7 @@ module.exports = {
           getmsg: false,
           simi: false,
           viewonce: false,
-          settings: createSettings(),
         }
-        // Prefix, bahasa, dan saklar fitur per grup disimpan di sini.
-        global.db.data.chats[m.chat].settings = createSettings(global.db.data.chats[m.chat].settings)
 
         var setting = global.db.data.settings[this.user.jid]
         // Objek default harus juga ditugaskan ke `setting`, kalau tidak variabel
@@ -121,12 +118,16 @@ module.exports = {
       } catch (e) {
         console.error(e)
       }
+      // Prefix, bahasa, dan saklar fitur per grup: dinormalkan sekali per pesan
+      // lalu disimpan balik, jadi `chatSettings` dan `chat.settings` satu objek.
+      let chat = global.db.data.chats[m.chat] || (global.db.data.chats[m.chat] = {})
+      chat.settings = createSettings(chat.settings)
+      let chatSettings = chat.settings
       if (setting.nyimak) return
       if (!m.fromMe && setting.self) return
       if (setting.pconly && m.chat.endsWith('g.us')) return
       if (setting.gconly && !m.chat.endsWith('g.us')) return
       if (typeof m.text !== 'string') m.text = ''
-      let chatSettings = createSettings((global.db.data.chats[m.chat] || {}).settings)
       for (let name in global.plugins) {
         let plugin = global.plugins[name]
         if (!plugin) continue
@@ -442,17 +443,11 @@ Untuk mematikan fitur ini, ketik
   }
 }
 
-global.dfail = (type, m, conn) => {
+global.dfail = (type, m) => {
   // Pesan gagal mengikuti bahasa yang dipilih untuk grup ini.
-  let lang
-  try {
-    let chats = global.db && global.db.data && global.db.data.chats
-    let chat = chats && chats[m.chat]
-    lang = resolveLanguage(chat && chat.settings)
-  } catch (e) {
-    lang = undefined
-  }
-  let msg = failMessage(type, lang)
+  let chats = global.db && global.db.data && global.db.data.chats
+  let chat = chats && chats[m.chat]
+  let msg = failMessage(type, resolveLanguage(chat && chat.settings))
   if (msg) return m.reply(msg)
 }
 

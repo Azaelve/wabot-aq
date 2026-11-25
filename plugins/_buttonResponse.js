@@ -1,5 +1,5 @@
 const { MessageType, newMessagesDB } = require('../lib/wa/message-type')
-const { createSettings, resolvePrefix } = require('../lib/group-settings')
+const { resolvePrefix } = require('../lib/group-settings')
 //const util = require('util')
 
 module.exports = {
@@ -9,10 +9,11 @@ module.exports = {
         if (m.mtype !== 'buttonsResponseMessage' && m.type !== 1) return
         let id = m.msg.selectedButtonId
         let isIdMessage = false, usedPrefix
-        // Tombol mengikuti prefix grup, sama seperti perintah teks.
-        let chatSettings = createSettings((global.db.data.chats[m.chat] || {}).settings)
+        // Tombol mengikuti prefix grup, sama seperti perintah teks. `settings`
+        // sudah dinormalkan handler sebelum plugin `all` dijalankan.
+        let chat = global.db.data.chats[m.chat] || {}
         let fallbackPrefix = this.prefix ? this.prefix : global.prefix
-        let chatPrefix = m.isGroup ? resolvePrefix(chatSettings, fallbackPrefix) : fallbackPrefix
+        let chatPrefix = m.isGroup ? resolvePrefix(chat.settings, fallbackPrefix) : fallbackPrefix
         for (let name in global.plugins) {
             let plugin = global.plugins[name]
             if (!plugin) continue

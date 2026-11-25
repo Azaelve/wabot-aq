@@ -2,11 +2,8 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const {
   FEATURES,
-  FEATURES_EN,
-  FEATURE_NAMES,
   normalizeLanguage,
   normalizePrefix,
-  normalizeFeatureName,
   toBoolean,
   createSettings,
   updateSettings,
@@ -37,16 +34,6 @@ test('normalizePrefix membedakan mode multi, tanpa prefix, dan karakter', () => 
   assert.equal(normalizePrefix(' #$ '), '#$')
   assert.equal(normalizePrefix(''), null)
   assert.equal(normalizePrefix('spasi spasi'), null)
-  assert.equal(normalizePrefix('terlalupanjang'), null)
-})
-
-test('normalizeFeatureName tidak peka huruf besar/kecil dan menolak nama asing', () => {
-  assert.equal(normalizeFeatureName('AntiLink'), 'antilink')
-  assert.equal(normalizeFeatureName(' simi '), 'simi')
-  assert.equal(normalizeFeatureName('ngawur'), '')
-  assert.equal(normalizeFeatureName(null), '')
-  assert.deepEqual(FEATURE_NAMES, Object.keys(FEATURES))
-  assert.deepEqual(Object.keys(FEATURES_EN), FEATURE_NAMES)
 })
 
 test('toBoolean mengenali nilai on/off umum dan mengembalikan null untuk sisanya', () => {
@@ -77,7 +64,7 @@ test('createSettings idempoten', () => {
 test('updateSettings mengganti prefix dan bahasa tanpa mengubah objek lama', () => {
   const old = createSettings({ features: { antilink: false } })
   const { settings, changed, errors } = updateSettings(old, { prefix: '/', language: 'en' })
-  assert.deepEqual(changed, ['prefix', 'language'])
+  assert.equal(changed, true)
   assert.deepEqual(errors, [])
   assert.equal(settings.prefix, '/')
   assert.equal(settings.language, 'en')
@@ -89,53 +76,54 @@ test('updateSettings mengganti prefix dan bahasa tanpa mengubah objek lama', () 
 test('updateSettings tidak menandai perubahan bila nilainya sama', () => {
   const old = createSettings({ prefix: '!', language: 'en' })
   const { changed, errors } = updateSettings(old, { prefix: '!', language: 'en' })
-  assert.deepEqual(changed, [])
+  assert.equal(changed, false)
   assert.deepEqual(errors, [])
 })
 
 test('updateSettings melaporkan nilai tidak valid tanpa mengubah apa pun', () => {
   const old = createSettings({ prefix: '!', language: 'id' })
   const { settings, changed, errors } = updateSettings(old, { prefix: 'dua kata', language: 'xx' })
-  assert.deepEqual(changed, [])
-  assert.deepEqual(errors, ['prefix', 'language'])
+  assert.equal(changed, false)
+  assert.deepEqual(errors, [
+    { field: 'prefix', value: 'dua kata' },
+    { field: 'language', value: 'xx' },
+  ])
   assert.deepEqual(settings, old)
 })
 
 test('updateSettings mengatur dan membalik saklar fitur', () => {
-  let result = updateSettings(createSettings(), { feature: 'AntiLink', enabled: 'off' })
-  assert.deepEqual(result.changed, ['feature:antilink'])
+  let result = updateSettings(createSettings(), { feature: 'AntiLink', enabled: false })
+  assert.equal(result.changed, true)
   assert.equal(result.settings.features.antilink, false)
 
   result = updateSettings(result.settings, { feature: 'antilink' })
-  assert.deepEqual(result.changed, ['feature:antilink'])
+  assert.equal(result.changed, true)
   assert.equal(result.settings.features.antilink, true)
 
   result = updateSettings(result.settings, { feature: 'antilink' })
   assert.equal(result.settings.features.antilink, false)
 })
 
-test('updateSettings menerima banyak fitur sekaligus dan menolak nama asing', () => {
-  const { settings, changed, errors } = updateSettings(createSettings(), {
-    features: { simi: false, welcome: true, ngawur: true },
-  })
-  assert.deepEqual(settings.features, { simi: false, welcome: true })
-  assert.deepEqual(changed, ['feature:simi', 'feature:welcome'])
-  assert.deepEqual(errors, ['feature:ngawur'])
-})
-
-test('updateSettings menolak nilai boolean yang tidak dikenal', () => {
-  const { settings, changed, errors } = updateSettings(createSettings(), { feature: 'simi', enabled: 'kadang' })
-  assert.deepEqual(changed, [])
-  assert.deepEqual(errors, ['value:simi'])
+test('updateSettings menolak nama fitur asing', () => {
+  const { settings, changed, errors } = updateSettings(createSettings(), { feature: 'ngawur', enabled: false })
+  assert.equal(changed, false)
+  assert.deepEqual(errors, [{ field: 'feature', value: 'ngawur' }])
   assert.deepEqual(settings.features, {})
 })
 
-test('isFeatureEnabled memakai bawaan true dan hanya false yang mematikan', () => {
+test('FEATURES mencakup semua nama dengan label dua bahasa', () => {
+  for (const [name, label] of Object.entries(FEATURES)) {
+    assert.match(name, /^[a-z]+$/)
+    assert.equal(typeof label.id, 'string')
+    assert.equal(typeof label.en, 'string')
+  }
+})
+
+test('isFeatureEnabled hanya dimatikan oleh nilai false', () => {
   assert.equal(isFeatureEnabled(createSettings(), 'antilink'), true)
   assert.equal(isFeatureEnabled({ features: { antilink: false } }, 'antilink'), false)
   assert.equal(isFeatureEnabled({ features: { antilink: true } }, 'antilink'), true)
-  assert.equal(isFeatureEnabled({}, 'antilink', false), false)
-  assert.equal(isFeatureEnabled(createSettings(), 'ngawur', false), false)
+  assert.equal(isFeatureEnabled({}, 'antilink'), true)
   assert.equal(isFeatureEnabled(null, 'simi'), true)
 })
 

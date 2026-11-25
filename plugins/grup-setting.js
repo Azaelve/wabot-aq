@@ -1,109 +1,90 @@
 let {
+  FEATURES,
   createSettings,
   updateSettings,
-  FEATURES,
-  FEATURES_EN,
+  isFeatureEnabled,
   resolveLanguage,
   translate,
+  toBoolean,
 } = require('../lib/group-settings')
 
-/** Baris ringkas untuk daftar pengaturan. */
-function render(chat, lang) {
-  let t = (key, params) => translate(lang, key, params)
-  let settings = chat.settings
-  let showPrefix = settings.prefix === 'multi'
-    ? '(multi)'
-    : settings.prefix === 'none'
-      ? t('settings_prefix_chars', { value: 'none' })
-      : t('settings_prefix_chars', { value: settings.prefix })
-  let labels = lang === 'en' ? FEATURES_EN : FEATURES
+/** Daftar pengaturan grup dalam bahasa yang dipilih. */
+function render(settings, lang) {
   let lines = [
-    `*${t('settings_title')}*`,
+    `*${translate(lang, 'settings_title')}*`,
     '',
-    `◦ ${t('settings_prefix_label')}: ${showPrefix}`,
-    `◦ ${t('settings_language_label')}: ${settings.language}`,
-    '◦ ' + (lang === 'en' ? 'Features' : 'Fitur') + ':',
+    `◦ ${translate(lang, 'settings_prefix_label')}: ${settings.prefix}`,
+    `◦ ${translate(lang, 'settings_language_label')}: ${settings.language}`,
+    `◦ ${translate(lang, 'settings_features_label')}:`,
   ]
   for (let name of Object.keys(FEATURES)) {
-    let enabled = settings.features[name] !== false
-    lines.push(`  ${enabled ? '✓' : '✗'} ${name} — ${labels[name]}`)
+    lines.push(`  ${isFeatureEnabled(settings, name) ? '✓' : '✗'} ${name} — ${FEATURES[name][lang]}`)
   }
   return lines.join('\n')
 }
 
-let handler = async (m, { usedPrefix, command, args }) => {
+let handler = async (m, { usedPrefix, args }) => {
   let chat = global.db.data.chats[m.chat]
   chat.settings = createSettings(chat.settings)
   let lang = resolveLanguage(chat.settings)
   let t = (key, params) => translate(lang, key, params)
-  let sub = (args[0] || '').toLowerCase()
+  let sub = (args[0] || '').trim().toLowerCase()
   let value = (args[1] || '').trim()
+  let flag = (args[2] || '').trim()
   let usage = () => m.reply(t('settings_usage', { prefix: usedPrefix }))
 
-  if (!sub || /^(list|status|show|info)$/.test(sub)) {
-    return m.reply(render(chat, lang))
-  }
+  if (!sub) return m.reply(render(chat.settings, lang))
 
   if (sub === 'reset') {
     chat.settings = createSettings()
-    return m.reply(render(chat, resolveLanguage(chat.settings)))
+    return m.reply(render(chat.settings, resolveLanguage(chat.settings)))
   }
 
+  // Setiap perintah mengubah satu isian, jadi satu patch dan satu label.
   let patch
-  let key
+  let name = ''
+  let label
   if (sub === 'prefix') {
     if (!value) return usage()
     patch = { prefix: value }
-    key = 'prefix'
-  } else if (['bahasa', 'language', 'lang', 'bhs'].includes(sub)) {
+    label = t('settings_prefix_label')
+  } else if (sub === 'bahasa' || sub === 'language') {
     if (!value) return usage()
     patch = { language: value }
-    key = 'bahasa'
-  } else if (['fitur', 'feature'].includes(sub)) {
+    label = t('settings_language_label')
+  } else if (sub === 'fitur' || sub === 'feature') {
     if (!value) return usage()
-    patch = { feature: value, enabled: args[2] }
-    key = 'fitur ' + value
-  } else {
-    return usage()
-  }
+    name = value.toLowerCase()
+    let enabled = flag ? toBoolean(flag) : undefined
+    if (enabled === null) {
+      return m.reply(t('settings_bad_value', { key: `${t('settings_feature_word')} ${name}`, value: flag }))
+    }
+    patch = { feature: name, enabled }
+    label = `${t('settings_feature_word')} ${name}`
+  } else return usage()
 
   let result = updateSettings(chat.settings, patch)
-  if (result.errors.length) {
-    for (let error of result.errors) {
-      if (error.startsWith('feature:')) {
-        m.reply(t('settings_unknown_feature', {
-          value: error.slice('feature:'.length),
-          list: Object.keys(FEATURES).join(', '),
-        }))
-      } else if (error.startsWith('value:')) {
-        m.reply(t('settings_bad_value', { key: error.slice('value:'.length), value: args[2] }))
-      } else {
-        m.reply(t('settings_bad_value', { key: error, value }))
-      }
-    }
-    return
+  for (let error of result.errors) {
+    m.reply(error.field === 'feature'
+      ? t('settings_unknown_feature', { value: error.value, list: Object.keys(FEATURES).join(', ') })
+      : t('settings_bad_value', { key: error.field, value: error.value }))
   }
+  if (result.errors.length) return
 
   chat.settings = result.settings
-  if (!result.changed.length) return m.reply(t('settings_unchanged', { key }))
+  if (!result.changed) return m.reply(t('settings_unchanged', { key: label }))
 
   let shown
-  if (key === 'prefix') {
-    shown = chat.settings.prefix === 'none' ? 'none' : chat.settings.prefix
-  } else if (key === 'bahasa') {
-    shown = chat.settings.language
-  } else {
-    let name = key.slice('fitur '.length)
-    shown = chat.settings.features[name] !== false ? t('settings_feature_on') : t('settings_feature_off')
-  }
-  m.reply(t('settings_saved', { key, value: shown }))
+  if (sub === 'prefix') shown = chat.settings.prefix
+  else if (name) shown = isFeatureEnabled(chat.settings, name) ? t('settings_feature_on') : t('settings_feature_off')
+  else shown = chat.settings.language
+  m.reply(t('settings_saved', { key: label, value: shown }))
 }
 
 handler.help = ['grup']
 handler.tags = ['group', 'owner']
-handler.command = /^(grup|groupset|gsetting|setgrup)$/i
+handler.command = /^grup$/i
 handler.group = true
 handler.staff = true
-handler.exp = 0
 
 module.exports = handler
