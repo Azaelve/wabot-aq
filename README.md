@@ -231,6 +231,12 @@ Alur login yang sudah diuji (Node v26.13.1, Baileys 7.0.0-rc14):
 
 Tanpa opsi `--pairing`, bot menampilkan QR di terminal (`--big-qr` untuk QR besar). Satu nomor sebaiknya dipakai satu proses bot saja — dua proses dengan sesi yang sama akan saling memutus.
 
+### Peran, cooldown, dan EXIF stiker
+
+- **Owner & staff dua lapis** — `global.owner` di `config.js` (ditambah nomor bot dan pesan `fromMe`) adalah lapis owner; `global.staff` atau `user.staff = true` di database adalah lapis staff untuk perintah internal. Plugin menandai kebutuhannya lewat `handler.owner`, `handler.staff`, `handler.mods`, atau `handler.premium`.
+- **Cooldown & anti-spam** — `handler.cooldown = 5000` memberi jeda 5 detik per pengirim untuk perintah itu; anti-spam bawaan membatasi 10 pesan per 10 detik dan hanya memberi satu peringatan per jendela.
+- **EXIF stiker** — `lib/sticker-exif.js` menulis id paket, nama paket, pembuat, dan emoji ke stiker webp; `sticker()` memakainya dan `getexif` membacanya kembali.
+
 ## Catatan fork ini (v2.6.0)
 
 Host API lama (`api.xteam.xyz`, `zahirr-web.herokuapp.com`, `api.zeks.xyz`, `leyscoders-api.herokuapp.com`, `nurutomo.herokuapp.com`) sudah mati, jadi fork ini tidak lagi bergantung padanya:

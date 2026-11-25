@@ -244,6 +244,16 @@ Semua kode WhatsApp ada di `lib/wa/` dan tidak ada plugin yang boleh mengimpor `
 
 `lib/simple.js` sekarang hanya re-export `smsg`. Jalankan: `node . --pairing 6285178964685` (kode 8 karakter, juga ditulis ke `pairing-code.txt`), atau `node .` untuk QR. Tes: `npm test` = `node test.js` + `node --test tests/`.
 
+## Peran, Cooldown, dan EXIF Stiker (fitur JH-Zapo, 2026-11-25)
+
+Tiga fitur yang belum ada di wabot-aq, ditulis sebagai modul murni yang dapat diuji:
+
+- `lib/permission.js` — `normalizeJid`, `toJidSet`, `resolveRoles`, `checkAccess`. Dua lapis peran: **owner** (`global.owner`, nomor bot, dan `fromMe`) serta **staff** (`global.staff` atau `user.staff` di database); staff mencakup mods. `handler.js` menghitung `roles` sekali per pesan, meneruskannya ke `plugin.before`/`extra` sebagai `isStaff` dan `roles`, lalu memakai `checkAccess()` untuk flag `rowner`/`owner`/`staff`/`mods`/`premium`. Pesan gagal memakai `global.dfail` (kunci baru: `staff`).
+- `lib/cooldown.js` — `createCooldown({ now })` (`hit`/`reset`/`clear`) dan `createSpamGuard({ limit, windowMs, now })`. Plugin dapat memasang `handler.cooldown = <ms>` untuk cooldown per pengirim; `plugins/_antispam.js` memakai spam guard 10 pesan / 10 detik, menggantikan versi lama yang memanggil `m.messageTimestamp.toNumber()` (selalu error di Baileys 7 karena timestamp sudah berupa angka).
+- `lib/sticker-exif.js` — `buildMeta`, `buildExif`, `parseExif` (murni) serta `addExif`, `readExif` (node-webpmux). `lib/sticker.js` mendelegasikan `addExif` ke modul ini agar hanya ada satu implementasi, dan `plugins/getexif.js` memakai `readExif` dengan pesan error yang jelas.
+
+Tes: `tests/permission.test.js`, `tests/cooldown.test.js`, `tests/sticker-exif.test.js` (termasuk WebP sintetis untuk membuktikan `addExif`/`readExif`). Total `npm test` saat ini **63 tes lolos**.
+
 ## Uji Login Nyata (2026-11-25)
 
 Pairing code dijalankan di VM dengan nomor `6285178964685` dan **berhasil**: `wa-auth/creds.json` menjadi `registered: true`, `me: 6285178964685:3@s.whatsapp.net`, dan bot menyambung sebagai `6285178964685@s.whatsapp.net`. Kode yang dipakai saat uji: `QV5BFVY3`.

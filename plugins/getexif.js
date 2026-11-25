@@ -1,18 +1,21 @@
-let webp = require('node-webpmux')
 let util = require('util')
+let { readExif } = require('../lib/sticker-exif')
 
 let handler = async (m) => {
-    if (!m.quoted) return m.reply('Tag stikernya!')
-    let q = { message: { [m.quoted.mtype]: m.quoted } }
-    if (/sticker/.test(m.quoted.mtype)) {
-        let img = new webp.Image()
-        await img.load(await m.quoted.download())
-        m.reply(util.format(JSON.parse(img.exif.slice(22).toString())))
-    }
+  if (!m.quoted) return m.reply('Tag stikernya!')
+  if (!/sticker/.test(m.quoted.mtype || '')) return m.reply('Yang dikutip bukan stiker.')
+  let meta
+  try {
+    meta = await readExif(await m.quoted.download())
+  } catch (e) {
+    return m.reply('Gagal membaca stiker: ' + e.message)
+  }
+  if (!meta) return m.reply('Stiker ini tidak punya metadata EXIF.')
+  m.reply(util.format(meta))
 }
+
 handler.help = ['getexif']
 handler.tags = ['sticker']
-
 handler.command = ['getexif']
 
 module.exports = handler

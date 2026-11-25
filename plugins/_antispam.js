@@ -1,22 +1,12 @@
+const { createSpamGuard } = require('../lib/cooldown')
+
+// 10 pesan per 10 detik masih wajar; selebihnya diberi satu peringatan per jendela.
+const guard = createSpamGuard({ limit: 10, windowMs: 10000 })
+
 module.exports = {
-    async all(m) {
-        if (!m.message) return
-        this.spam = this.spam ? this.spam : {}
-        if (m.sender in this.spam) {
-            this.spam[m.sender].count++
-            if (m.messageTimestamp.toNumber() - this.spam[m.sender].lastspam > 10) {
-                if (this.spam[m.sender].count > 10) {
-                    //global.db.data.users[m.sender].banned = true
-                    m.reply('*Jangan Spam!!*')
-                }
-                this.spam[m.sender].count = 0
-                this.spam[m.sender].lastspam = m.messageTimestamp.toNumber()
-            }
-        }
-        else this.spam[m.sender] = {
-            jid: m.sender,
-            count: 0,
-            lastspam: 0
-        }
-    }
+  async all(m) {
+    if (!m.message || m.fromMe) return
+    const res = guard.check(m.sender)
+    if (res.blocked && res.first) m.reply('*Jangan Spam!!*')
+  },
 }

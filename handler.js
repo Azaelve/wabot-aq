@@ -1,6 +1,11 @@
 let util = require('util')
 let simple = require('./lib/simple')
 let { MessageType } = require('./lib/wa/message-type')
+let { resolveRoles, checkAccess } = require('./lib/permission')
+let { createCooldown } = require('./lib/cooldown')
+
+// Cooldown per perintah; direset saat handler dimuat ulang.
+const cooldown = createCooldown()
 
 const isNumber = x => typeof x === 'number' && !isNaN(x)
 const delay = ms => isNumber(ms) && new Promise(resolve => setTimeout(resolve, ms))
@@ -130,10 +135,17 @@ module.exports = {
       let usedPrefix
       let _user = global.db.data && global.db.data.users && global.db.data.users[m.sender]
 
-      let isROwner = [global.conn.user.jid, ...global.owner].map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(m.sender)
-      let isOwner = isROwner || m.fromMe
-      let isMods = isOwner || global.mods.map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(m.sender)
-      let isPrems = isROwner || global.prems.map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(m.sender)
+      // Peran dihitung sekali per pesan: owner (config/bot/fromMe), staff, mods, premium.
+      let roles = resolveRoles(m.sender, {
+        owner: global.owner,
+        staff: global.staff,
+        mods: global.mods,
+        prems: global.prems,
+        user: _user,
+        botJid: global.conn.user.jid,
+        fromMe: m.fromMe,
+      })
+      let { isROwner, isOwner, isStaff, isMods, isPrems } = roles
       let antiSticker = global.db.data.chats[m.chat].antiSticker
       let groupMetadata = m.isGroup ? this.chats.get(m.chat).metadata || await this.groupMetadata(m.chat) : {} || {}
       let participants = m.isGroup ? groupMetadata.participants : [] || []
@@ -174,6 +186,8 @@ module.exports = {
           isAdmin,
           isBotAdmin,
           isPrems,
+          isStaff,
+          roles,
           antiSticker,
           chatUpdate,
           isBlocked,
@@ -206,24 +220,10 @@ module.exports = {
             if (name != 'unbanchat.js' && chat && chat.isBanned) return // Except this
             if (name != 'unbanuser.js' && user && user.banned) return
           }
-          if (plugin.rowner && plugin.owner && !(isROwner || isOwner)) { // Both Owner
-            fail('owner', m, this)
-            continue
-          }
-          if (plugin.rowner && !isROwner) { // Real Owner
-            fail('rowner', m, this)
-            continue
-          }
-          if (plugin.owner && !isOwner) { // Number Owner
-            fail('owner', m, this)
-            continue
-          }
-          if (plugin.mods && !isMods) { // Moderator
-            fail('mods', m, this)
-            continue
-          }
-          if (plugin.premium && !isPrems) { // Premium
-            fail('premium', m, this)
+          // Pemeriksaan peran terpusat: rowner, owner, staff, mods, premium.
+          let access = checkAccess(plugin, roles)
+          if (!access.allowed) {
+            fail(access.reason, m, this)
             continue
           }
           if (plugin.group && !m.isGroup) { // Group Only
@@ -257,6 +257,14 @@ module.exports = {
             this.reply(m.chat, `Diperlukan level *${plugin.level}* untuk menggunakan perintah ini. Level kamu ${_user.level}`, m)
             continue // If the level has not been reached
           }
+          // Cooldown opsional per plugin (`handler.cooldown = 5000` = 5 detik).
+          if (plugin.cooldown) {
+            let gate = cooldown.hit(name + ':' + m.sender, { windowMs: plugin.cooldown })
+            if (!gate.allowed) {
+              this.reply(m.chat, `Tunggu ${(gate.remainingMs / 1000).toFixed(1)} detik sebelum memakai *${command}* lagi.`, m)
+              continue
+            }
+          }
           let extra = {
             match,
             usedPrefix,
@@ -275,6 +283,8 @@ module.exports = {
             isAdmin,
             isBotAdmin,
             isPrems,
+            isStaff,
+            roles,
             chatUpdate,
             isBlocked,
           }
@@ -423,6 +433,7 @@ global.dfail = (type, m, conn) => {
     rowner: 'Perintah ini hanya dapat digunakan oleh _*OWWNER!1!1!*_',
     owner: 'Perintah ini hanya dapat digunakan oleh _*Owner Bot*_!',
     mods: 'Perintah ini hanya dapat digunakan oleh _*Moderator*_ !',
+    staff: 'Perintah ini hanya dapat digunakan oleh _*Staff Bot*_ !',
     premium: 'Perintah ini hanya untuk member _*Premium*_ !',
     group: 'Perintah ini hanya dapat digunakan di grup!',
     private: 'Perintah ini hanya dapat digunakan di Chat Pribadi!',
