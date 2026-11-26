@@ -1,5 +1,5 @@
-const { MessageType, newMessagesDB } = require('../lib/wa/message-type')
-const { resolvePrefix } = require('../lib/group-settings')
+const { MessageType, newMessagesDB } = require('../../lib/wa/message-type')
+const { resolvePrefix } = require('../../lib/group-settings')
 //const util = require('util')
 
 module.exports = {

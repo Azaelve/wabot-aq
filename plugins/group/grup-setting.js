@@ -6,7 +6,7 @@ let {
   resolveLanguage,
   translate,
   toBoolean,
-} = require('../lib/group-settings')
+} = require('../../lib/group-settings')
 
 /** Daftar pengaturan grup dalam bahasa yang dipilih. */
 function render(settings, lang) {

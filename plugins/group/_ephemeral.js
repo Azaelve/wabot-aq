@@ -1,4 +1,4 @@
-const { WA_MESSAGE_STUB_TYPE } = require('../lib/wa/message-type')
+const { WA_MESSAGE_STUB_TYPE } = require('../../lib/wa/message-type')
 
 module.exports = {
   all(m, chatUpdate) {

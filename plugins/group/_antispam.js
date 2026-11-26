@@ -1,4 +1,4 @@
-const { createSpamGuard } = require('../lib/cooldown')
+const { createSpamGuard } = require('../../lib/cooldown')
 
 // 10 pesan per 10 detik masih wajar; selebihnya diberi satu peringatan per jendela.
 const guard = createSpamGuard({ limit: 10, windowMs: 10000 })

@@ -1,4 +1,4 @@
-let { Presence, GroupSettingChange } = require('../lib/wa/message-type')
+let { Presence, GroupSettingChange } = require('../../lib/wa/message-type')
 let handler  = async (m, { conn, args, usedPrefix, command }) => {
 	let isClose = { // Switch Case Like :v
 		'open': false,

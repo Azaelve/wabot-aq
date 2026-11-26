@@ -1,4 +1,4 @@
-let levelling = require('../lib/levelling')
+let levelling = require('../../lib/levelling')
 module.exports = {
 	before(m) {
 		let user = global.db.data.users[m.sender]
