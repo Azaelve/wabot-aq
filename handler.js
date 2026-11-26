@@ -3,6 +3,7 @@ let simple = require('./lib/simple')
 let { MessageType } = require('./lib/wa/message-type')
 let { resolveRoles, checkAccess } = require('./lib/permission')
 let { createCooldown } = require('./lib/cooldown')
+let { findParticipant, isAdminParticipant } = require('./lib/wa/jid')
 let {
   createSettings,
   isFeatureEnabled,
@@ -159,13 +160,15 @@ module.exports = {
         fromMe: m.fromMe,
       })
       let { isROwner, isOwner, isStaff, isMods, isPrems } = roles
-      let antiSticker = global.db.data.chats[m.chat].antiSticker
+      let antiSticker = (global.db.data.chats[m.chat] || {}).antiSticker
       let groupMetadata = m.isGroup ? this.chats.get(m.chat).metadata || await this.groupMetadata(m.chat) : {} || {}
       let participants = m.isGroup ? groupMetadata.participants : [] || []
-      let user = m.isGroup ? participants.find(u => u.jid == m.sender) : {} // User Data
-      let bot = m.isGroup ? participants.find(u => u.jid == this.user.jid) : {} // Your Data
-      let isAdmin = user.isAdmin || user.isSuperAdmin || false // Is User Admin?
-      let isBotAdmin = bot.isAdmin || bot.isSuperAdmin || false // Are you Admin?
+      // Peserta dicari lewat helper JID: sebagian grup memakai alamat LID,
+      // jadi `u.jid == m.sender` saja bisa tidak menemukan apa pun.
+      let user = m.isGroup ? findParticipant(participants, m.sender) || {} : {}
+      let bot = m.isGroup ? findParticipant(participants, this.user.jid) || {} : {}
+      let isAdmin = user.isAdmin || user.isSuperAdmin || isAdminParticipant(user)
+      let isBotAdmin = bot.isAdmin || bot.isSuperAdmin || isAdminParticipant(bot)
       let isBlocked = this.blocklist.map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').filter(v => v != this.user.jid).includes(m.sender) // Is User Blocked?
       for (let name in global.plugins) {
         let plugin = global.plugins[name]
