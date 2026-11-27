@@ -1,29 +1,39 @@
 let fetch = require('node-fetch')
 
 let handler = async (m, { conn, args }) => {
-  if (!args[0]) throw 'Uhm...url nya mana?'
-  let res = await fetch(global.API('xteam', '/dl/fb', {
-    url: args[0]
-  }, 'APIKEY'))
-  if (res.status !== 200) {
-    res.text()
-    throw res.status
+  const react = async (emoji) => {
+    try {
+      const sock = (conn && conn.sock) || conn
+      if (sock?.sendMessage) {
+        await sock.sendMessage(m.chat, { react: { text: emoji, key: m.key } })
+      }
+    } catch {}
   }
-  let json = await res.json()
-  if (!json.result) throw json
-  let { name, author, description, uploadDate, duration, url, isFamilyFriendly, genre, keywords, contentSize, videoQuality, commentCount } = json.result
-  let { name: authorname, url: authorlink } = author || {}
-  let dateConfig = {
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  }
-  let unknown = '_Unknown_'
-  let none = '_None_'
-  let caption = `
+  try {
+    await react('⏳')
+    if (!args[0]) throw 'Uhm...url nya mana?'
+    let res = await fetch(global.API('xteam', '/dl/fb', {
+      url: args[0]
+    }, 'APIKEY'))
+    if (res.status !== 200) {
+      res.text()
+      throw res.status
+    }
+    let json = await res.json()
+    if (!json.result) throw json
+    let { name, author, description, uploadDate, duration, url, isFamilyFriendly, genre, keywords, contentSize, videoQuality, commentCount } = json.result
+    let { name: authorname, url: authorlink } = author || {}
+    let dateConfig = {
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }
+    let unknown = '_Unknown_'
+    let none = '_None_'
+    let caption = `
 Konten${isFamilyFriendly ? ' ' : ' *Tidak* '}Family Friendly
 Post oleh ${name} (${authorname || ''}) (${authorlink || ''})
 Diposting pada ${new Date(uploadDate).toLocaleDateString('id', dateConfig)}
@@ -36,7 +46,12 @@ ${description}
 
 Keyword: ${keywords || none}
 `.trim()
-  conn.sendFile(m.chat, url, 'media-fb', caption, m)
+    await conn.sendFile(m.chat, url, 'media-fb', caption, m)
+    await react('✅')
+  } catch (e) {
+    await react('❌')
+    throw e
+  }
 }
 handler.help = ['fb'].map(v => v + ' <url>')
 handler.tags = ['downloader']

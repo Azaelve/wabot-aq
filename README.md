@@ -7,6 +7,13 @@ Simple WhatsApp Bot — **fork Azaelve**, versi `2.7.0` (Baileys 7)
 > Fork ini melanjutkan [Nurutomo/wabot-aq](https://github.com/Nurutomo/wabot-aq) yang sudah tidak dirawat sejak 27 Juni 2021.
 > Semua kredit untuk kode asli tetap milik penulisnya — lihat bagian [Credit](#credit).
 
+## Saluran & Grup
+
+Ikuti info update bot di saluran WhatsApp, dan gabung grup untuk diskusi:
+
+- 📢 **Saluran (info update):** https://whatsapp.com/channel/0029Vb80ZFEBPzjcJDKZ5n0i
+- 💬 **Grup:** https://chat.whatsapp.com/Cr1TmNvs3CF57Mf4TSmC38?s=cl&p=a&iam=2
+
 ## FOR TERMUX/UBUNTU/SSH USER
 
 ```bash

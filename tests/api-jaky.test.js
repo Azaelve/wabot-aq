@@ -11,8 +11,10 @@ const {
   unwrap,
   request,
   requestResult,
+  requestBinary,
   BASE_URL,
 } = require('../lib/api/jaky')
+const jakyModule = require('../lib/api/jaky')
 
 /* ================================================================
  *  Klien: apiKey & isConfigured
@@ -145,4 +147,119 @@ test('requestResult melempar error pada envelope gagal', async () => {
     () => requestResult('/v1/x', {}, { fetchJSON: fakeFetch, env: { Zennith: 'k' } }),
     /rate limited/
   )
+})
+
+/* ================================================================
+ *  isJakyPath
+ * ================================================================ */
+
+const { isJakyPath } = require('../lib/api/routes/jaky')
+const { createApp } = require('../lib/api/server')
+const http = require('node:http')
+
+test('isJakyPath true untuk rute Jaky', () => {
+  for (const p of ['/dl/twitter', '/tools/qr', '/api/spotify', '/ephoto/abc',
+    '/search/youtube', '/jaky/ai/removebg', '/canvas/quote', '/dl/threads',
+    '/videomaker', '/sticker/stickerly/download']) {
+    assert.equal(isJakyPath(p), true, p)
+  }
+})
+
+test('isJakyPath false untuk path bukan rute Jaky', () => {
+  // Catatan: '/search/<apa pun>' adalah rute Jaky (wildcard katalog
+  // '/search/*' di createRouter), jadi '/search/tidakada' sengaja
+  // TIDAK ada di daftar ini — ia harus dijawab 503 secret, bukan fallback.
+  for (const p of ['/health', '/news/detik', '/tidak-ada', '/api/xyz',
+    '/kbbi', '/dl/tidakada', '/searchx']) {
+    assert.equal(isJakyPath(p), false, p)
+  }
+})
+
+function get(port, path) {
+  return new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port, path }, res => {
+      let body = ''
+      res.on('data', c => { body += c })
+      res.on('end', () => resolve({ status: res.statusCode, body }))
+    }).on('error', reject)
+  })
+}
+
+test('tanpa Zennith: rute Jaky 503 secret, path tak dikenal 503 fallback', async () => {
+  delete process.env.Zennith
+  delete process.env.ZENNITH
+  const app = createApp()
+  const server = app.listen(0, '127.0.0.1')
+  await new Promise(r => server.on('listening', r))
+  try {
+    const port = server.address().port
+    const jaky = await get(port, '/tools/qr?text=x')
+    assert.equal(jaky.status, 503)
+    assert.match(jaky.body, /Zennith belum diset/)
+    const unknown = await get(port, '/path-tidak-ada-xyz')
+    assert.equal(unknown.status, 503)
+    assert.match(unknown.body, /belum punya penyedia pengganti/)
+    const health = await get(port, '/health')
+    assert.equal(health.status, 200)
+  } finally {
+    server.close()
+  }
+})
+
+/* ================================================================
+ *  requestBinary (endpoint biner, mis. /v1/tools/qr -> PNG)
+ * ================================================================ */
+
+test('requestBinary mengembalikan buffer + content-type', async () => {
+  const fakeFetch = async () => ({
+    buffer: async () => Buffer.from('PNGDATA'),
+    headers: { get: (name) => (name.toLowerCase() === 'content-type' ? 'image/png' : null) },
+  })
+  const out = await requestBinary('/v1/tools/qr', { text: 'x' },
+    { fetchRaw: fakeFetch, env: { Zennith: 'k' } })
+  assert.equal(out.contentType, 'image/png')
+  assert.equal(out.buffer.toString(), 'PNGDATA')
+})
+
+test('requestBinary melempar bila key belum diset', async () => {
+  await assert.rejects(
+    () => requestBinary('/v1/tools/qr', { text: 'x' }, { env: {} }),
+    /Zennith belum diset/
+  )
+})
+
+test('/tools/qr meneruskan PNG dari Jaky (tanpa jaringan)', async () => {
+  const orig = jakyModule.requestBinary
+  jakyModule.requestBinary = async () => ({
+    buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+    contentType: 'image/png',
+  })
+  const prev = process.env.Zennith
+  process.env.Zennith = 'test-key'
+  const app = createApp()
+  const server = app.listen(0, '127.0.0.1')
+  await new Promise(r => server.on('listening', r))
+  try {
+    const port = server.address().port
+    const res = await new Promise((resolve, reject) => {
+      http.get({ host: '127.0.0.1', port, path: '/tools/qr?text=halo' }, res => {
+        const chunks = []
+        res.on('data', c => chunks.push(c))
+        res.on('end', () => resolve({
+          status: res.statusCode,
+          type: res.headers['content-type'],
+          body: Buffer.concat(chunks),
+        }))
+      }).on('error', reject)
+    })
+    assert.equal(res.status, 200)
+    assert.match(res.type, /image\/png/)
+    assert.equal(res.body[0], 0x89)
+    assert.equal(res.body.length, 4)
+  } finally {
+    server.close()
+    jakyModule.requestBinary = orig
+    if (prev === undefined) delete process.env.Zennith
+    else process.env.Zennith = prev
+  }
 })
